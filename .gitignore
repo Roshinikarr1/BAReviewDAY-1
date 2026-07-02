@@ -1,0 +1,7 @@
+# Office lock / temp files
+.~lock.*#
+~$*
+
+# OS cruft
+Thumbs.db
+.DS_Store

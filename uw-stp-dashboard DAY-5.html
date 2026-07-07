@@ -1,0 +1,2234 @@
+<!DOCTYPE html>
+<!--
+  UW STP Dashboard — DAY-4 build (underwriter-focused expansion)
+  =============================================================================
+  Scope tickets: DAT-5565 (HLD), DAT-5563 (What-If PRD), DAT-5715 (POC/UX).
+
+  DAY-4 changes (additive — nothing removed; Filters pane untouched):
+    - Nav re-prioritised: What-If Simulation promoted to position 2
+      (Overview stays default landing tab). New order:
+      Overview · What-If Simulation · Referral Drivers · Referral Workbench ·
+      Risk Leakage · Distribution · Trends · Insights.
+    - Overview: new STP Processing Funnel panel (Submissions → Eligibility →
+      Rules Engine → Approved/Referred/Rejected) — DAT-5731.
+    - NEW TAB Referral Workbench (operational queue): Pending by Priority +
+      Aging Buckets + turnaround — DAT-5732 / DAT-5733.
+    - NEW TAB Risk Leakage (governance): headline alerts, model-quality
+      false +/- rates, monitored categories — DAT-5735 / DAT-5736.
+    - Referral Drivers: new Exception Reasons table + bar; rule-effectiveness
+      score surfaced — DAT-5734.
+    - Overview KPI strip reconciled to the "ideal" set: SLA Breaches converted
+      to SLA Compliance Rate (breach count kept as sub-line); added Manual
+      Review Queue, Risk Leakage Count, Premium Processed via STP.
+    - Secondary metrics woven into existing tabs (Exception Count, Referral
+      Turnaround, Rule Effectiveness, STP Portfolio Loss Ratio, Override Rate,
+      Automation Cost Savings, False +/- Rates).
+
+  DAY-2 changes are tagged inline in the code with "Lead review:" markers
+  (JS line comments and HTML comments). Summary:
+    - LIGHT MODE re-theme (teal accent, amber warn, green/red deltas).
+    - Top bar: removed Refresh/Export; added Filter Pane + Info controls.
+    - Removed business scope / owner / launch / review description strip.
+    - RLS "Logged in as" role switcher — filters ALL tabs.
+    - Overview reduced to exactly 5 KPIs + granularity indicator + tooltips.
+    - Distribution: swapped pie/loss-cards, RLS, channel-focused visuals + captions.
+    - Referral Drivers: source-field labels, %-of-referrals bar, per-rule trend, caption.
+    - What-If: collapsible parameter explanation + per-slider helper text.
+    - Trend: multi-metric toggle set (STP, volume, referral, decline, TTD,
+      product perf, target-vs-actual, UW comparison) + RLS.
+    - Governance Log renamed "Insights": Key Insights cards + Scenario Change Log.
+
+  DAY-2 (round 2) changes:
+    - Removed the Open Items tracker entirely (button, panel, info section).
+    - Replaced the period slicer with a read-only "Active Filters" strip;
+      the period control now lives inside the Filter Pane.
+
+  All data is mock/sample (no backend, no PII). POC per DAT-5715.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UW STP Dashboard — P&C (Day-4)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,600;0,9..40,700;0,9..40,900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<!-- Power BI feasibility: native Treemap visual (Chart.js treemap controller) for GWP-by-channel -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.3.0/dist/chartjs-chart-treemap.min.js"></script>
+
+<style>
+/* ============================================================
+   Lead review: LIGHT MODE theme. Teal accent, amber warnings,
+   green/red deltas. Brand DM Sans typography retained.
+   ============================================================ */
+:root {
+  /* Sapiens brand tokens (kept for reference / semantic use) */
+  --spn-mandarin:#FF5900; --spn-honey:#FFA000; --spn-sapphire:#0D256F;
+  --spn-sun:#FFC200; --spn-indigo:#2A3FAD; --spn-sky:#7AD0F1;
+  --spn-grass:#359F3E; --spn-poppy:#E20000;
+
+  /* Lead review: sidebar navigation layout (DataSuite Portal style) — navy/orange palette */
+  --navy:#1a2456;
+  --navy-2:#2d3a7a;
+  --orange:#e8622c;
+  --orange-soft:rgba(232,98,44,0.12);
+
+  /* Surfaces */
+  --bg:#f4f5f9;
+  --panel:#ffffff;
+  --panel-2:#eef1f7;
+  --border:#e2e6ee;
+  --border-soft:#eceff5;
+  --txt:#1a2038;
+  --txt-dim:#5b6478;
+  --txt-faint:#8a93a8;
+
+  /* Structural accents = navy/orange; data deltas keep green/red/amber */
+  --accent:#1a2456;        /* navy primary (headings, active text, chart series) */
+  --accent-strong:#1a2456;
+  --accent-soft:rgba(26,36,86,0.08);
+  --warn:#f59e0b;          /* amber */
+  --pos:#16a34a;           /* green delta */
+  --neg:#dc2626;           /* red delta */
+  --shadow:0 6px 18px rgba(26,26,46,0.06);
+  --shadow-lg:0 12px 32px rgba(26,26,46,0.12);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html,body{
+  background:var(--bg); color:var(--txt);
+  font-family:'DM Sans','Segoe UI',system-ui,sans-serif;
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+body{ min-height:100vh; padding-bottom:52px; }
+a{ color:var(--accent); }
+.eyebrow{ font-weight:900; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--txt-faint); }
+
+/* MOCK badge */
+/* Power BI feasibility: moved to bottom-LEFT (over the sidebar's empty lower area) so it never
+   overlaps main-content chart axis labels/bars — e.g. the What-If Projected Impact chart. */
+.mock-badge{
+  position:fixed; left:14px; bottom:58px; z-index:60;
+  font-weight:900; font-size:9px; letter-spacing:.1em; color:var(--warn);
+  background:rgba(245,158,11,.12); border:1px solid rgba(245,158,11,.4);
+  padding:5px 9px; border-radius:6px; pointer-events:none; text-transform:uppercase;
+}
+
+/* ============================================================
+   Lead review: sidebar navigation layout (DataSuite Portal style)
+   TOP BAR — navy gradient, full width, sticky
+   ============================================================ */
+.topbar{
+  display:flex; align-items:center; gap:16px; padding:0 22px; height:58px;
+  background:linear-gradient(90deg,var(--navy),var(--navy-2));
+  position:sticky; top:0; z-index:100; color:#fff;
+}
+/* Lead review: replaced placeholder icon with Sapiens logo/wordmark */
+.sapiens-wordmark{ display:inline-flex; align-items:flex-start; font-weight:900; font-size:20px;
+  color:#fff; letter-spacing:-.01em; line-height:1; }
+.sapiens-wordmark .spn-dot{ width:8px; height:8px; background:var(--orange); border-radius:2px; margin:2px 0 0 2px; }
+.topbar-divider{ width:1px; height:22px; background:rgba(255,255,255,0.32); margin:0 4px; }
+.topbar .app-name{ font-weight:900; font-size:17px; color:#fff; }
+.topbar-right{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+
+/* Lead review: filter + info icon buttons, grouped top-right */
+.tb-icon{ width:36px; height:36px; border-radius:9px; border:1px solid rgba(255,255,255,0.28);
+  background:rgba(255,255,255,0.12); color:#fff; font-size:15px; cursor:pointer; display:grid; place-items:center; }
+.tb-icon:hover{ background:rgba(255,255,255,0.24); }
+.tb-icon svg{ display:block; }
+
+/* ============================================================
+   Lead review: full filter pane (Claims Dashboard pattern)
+   ============================================================ */
+.filter-panel{ position:sticky; top:58px; z-index:80; display:none;
+  background:#eef3fb; border-bottom:1px solid #c4d3ec; box-shadow:var(--shadow-lg); padding:16px 22px; }
+.filter-panel.show{ display:block; }
+/* Lead review: removed rounded filter styling — squared 4px fields/cards */
+.fp-close{ position:absolute; right:16px; top:12px; width:28px; height:28px; border-radius:4px;
+  border:1px solid #b9c8e6; background:#fff; color:var(--navy); cursor:pointer; font-size:15px; line-height:1; }
+.fp-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px 28px; max-width:1080px; }
+.fp-col{ display:flex; flex-direction:column; gap:12px; }
+.fp-card{ background:#fff; border:1px solid #bcd0ee; border-radius:4px; padding:11px 13px; }
+.fp-label{ display:block; font-size:11px; font-weight:700; color:var(--navy); margin-bottom:7px; }
+.fp-card select, .fp-card input[type=number]{ width:100%; font-family:inherit; font-size:12.5px;
+  padding:7px 9px; border:1px solid var(--border); border-radius:4px; color:var(--txt); background:#fff; }
+.fp-radios{ display:flex; flex-direction:column; gap:5px; font-size:12.5px; }
+.fp-radios label{ display:flex; align-items:center; gap:8px; cursor:pointer; }
+.fp-radios input{ accent-color:var(--navy); }
+.fp-custom{ display:none; align-items:center; gap:7px; margin-top:9px; }
+.fp-custom.show{ display:flex; }
+.fp-custom input{ font-size:12px; padding:6px 8px; border:1px solid var(--border); border-radius:4px; color:var(--txt); background:#fff; }
+/* Lead review: removed Premium/Sum Assured Range and High Value Submissions (styles removed) */
+
+/* ============================================================
+   LAYOUT — left sidebar + main content
+   ============================================================ */
+.layout{ display:flex; align-items:flex-start; }
+.sidebar{ width:214px; flex:0 0 214px; background:var(--panel); border-right:1px solid var(--border);
+  position:sticky; top:58px; height:calc(100vh - 58px); overflow-y:auto; padding:16px 0; }
+
+/* Lead review: logged-in-as role switcher moved to top of sidebar */
+.rls-box{ margin:0 12px 10px; padding:9px 11px; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; }
+.rls-box .rls-label{ display:block; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--txt-faint); margin-bottom:5px; }
+.rls-box select{ width:100%; background:transparent; border:none; color:var(--navy); font-family:inherit;
+  font-size:12px; font-weight:700; cursor:pointer; outline:none; }
+.rls-box select option{ color:var(--txt); font-weight:600; }
+.side-divider{ height:1px; background:var(--border); margin:6px 12px 10px; }
+
+.nav{ display:flex; flex-direction:column; gap:2px; }
+.navlink{ display:flex; align-items:center; gap:10px; font-family:inherit; font-size:13px; font-weight:600;
+  color:var(--txt-dim); background:transparent; border:none; border-left:3px solid transparent;
+  padding:11px 16px; cursor:pointer; text-align:left; transition:.12s; }
+.navlink:hover{ background:var(--panel-2); color:var(--navy); }
+.navlink.active{ background:var(--orange-soft); border-left-color:var(--orange); color:var(--navy); font-weight:700; }
+
+.main{ flex:1; min-width:0; padding:0 24px 24px; }
+.page-title{ font-size:20px; font-weight:700; color:var(--navy); padding:18px 0 8px; }
+
+/* Buttons */
+.btn{ font-family:inherit; font-size:12.5px; font-weight:600; border-radius:9px; cursor:pointer;
+  border:1px solid var(--border); background:var(--panel); color:var(--txt);
+  padding:8px 13px; display:inline-flex; align-items:center; gap:7px; transition:.15s; }
+.btn:hover{ border-color:var(--navy); color:var(--navy); }
+/* Lead review: primary buttons pill-shaped + orange (like "+ New Claim") */
+.btn.accent{ background:var(--orange); border-color:var(--orange); color:#fff; border-radius:999px; padding:9px 18px; }
+.btn.accent:hover{ background:#cf541f; color:#fff; }
+.btn.icon{ padding:8px 11px; }
+
+/* ============================================================
+   ACTIVE FILTERS STRIP — pinned at top of main content area
+   ============================================================ */
+.active-filters{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 0;
+  position:sticky; top:58px; z-index:30; background:var(--bg); border-bottom:1px solid var(--border); }
+.af-label{ font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--txt-faint); margin-right:2px; }
+/* Lead review: removed rounded filter styling — squared 4px chips */
+.af-pill{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--txt);
+  background:var(--panel); border:1px solid var(--navy); border-radius:4px; padding:5px 11px; }
+.af-pill .af-key{ color:var(--navy); font-weight:900; font-size:9px; letter-spacing:.05em; text-transform:uppercase; }
+
+/* ============================================================
+   CONTENT / CARDS
+   ============================================================ */
+.content{ padding:16px 0 0; }
+.tabpanel{ display:none; animation:fade .25s ease; }
+.tabpanel.active{ display:block; }
+@keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+.grid{ display:grid; gap:16px; }
+.g-2{ grid-template-columns:1fr 1fr; }
+.g-3{ grid-template-columns:2fr 1fr; }
+
+.card{
+  background:var(--panel); border:1px solid var(--border-soft);
+  border-radius:24px 0 24px 0; padding:18px; box-shadow:var(--shadow);
+}
+.card-h{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; gap:12px; }
+.card-h h3{ font-weight:600; font-size:15px; }
+.card-h .sub{ font-size:11.5px; color:var(--txt-faint); }
+.caption{ font-size:11px; color:var(--txt-dim); margin-top:10px; font-style:italic;
+  border-left:2px solid var(--accent); padding-left:8px; }
+.chart-wrap{ position:relative; height:260px; }
+.chart-wrap.tall{ height:330px; }
+
+/* KPI cards — DataSuite style, Lead review: reduced card size */
+/* Day-4: KPI strip grew from 5 → 8 cards (ideal-layout reconciliation); 4-per-row keeps two balanced rows */
+.kpi-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:11px; padding:12px 0 4px; }
+.kpi{ background:var(--panel); border:1px solid var(--border-soft); border-radius:11px;
+  padding:11px 12px; box-shadow:var(--shadow); position:relative; cursor:help; }
+.kpi .eyebrow{ font-size:9px; }
+.kpi .k-num{ font-size:21px; font-weight:700; color:var(--navy); line-height:1.05; margin:4px 0 2px; }
+.kpi .k-num small{ font-size:11px; font-weight:600; color:var(--txt-dim); }
+.delta{ font-size:10.5px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+.delta.up{ color:var(--pos); } .delta.down{ color:var(--neg); }
+.delta .vs{ color:var(--txt-faint); font-weight:400; margin-left:2px; }
+/* Lead review: reduced KPI card size — source detail kept in the hover tooltip only */
+.kpi .k-hint{ display:none; }
+/* Day-4 (Part 3b): inline STP trajectory sparkline + "View full trend" link in the KPI card */
+.kpi-spark{ height:30px; margin:7px 0 2px; }
+.spark-link{ font-family:inherit; font-size:10px; font-weight:700; color:var(--navy); background:none;
+  border:none; padding:0; cursor:pointer; display:inline-flex; align-items:center; gap:3px; }
+.spark-link:hover{ color:var(--orange); text-decoration:underline; }
+
+/* funnel */
+.funnel{ display:flex; flex-direction:column; gap:12px; }
+.funnel-row .fr-top{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:5px; }
+.funnel-row .fr-top .lbl{ font-weight:600; }
+.funnel-row .fr-top .val{ color:var(--txt-dim); }
+.bar-track{ height:12px; background:var(--panel-2); border-radius:999px; overflow:hidden; }
+.bar-fill{ height:100%; border-radius:999px; transition:width .5s ease; }
+
+/* Actual vs Expected cards */
+.ave-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.ave{ background:var(--panel-2); border:1px solid var(--border-soft); border-radius:12px 0 12px 0;
+  padding:13px 14px; border-left:3px solid var(--txt-faint); }
+.ave.good{ border-left-color:var(--pos); } .ave.warn{ border-left-color:var(--warn); } .ave.bad{ border-left-color:var(--neg); }
+.ave .ave-lbl{ font-size:11px; color:var(--txt-dim); font-weight:600; }
+.ave .ave-ratio{ font-size:22px; font-weight:300; margin:6px 0 2px; }
+.ave .ave-detail{ font-size:10.5px; color:var(--txt-faint); }
+/* Power BI feasibility: bullet-chart style A/E card — flat Actual bar, vertical
+   Expected target line, status shown as plain colored text (no pill badge, no gradient). */
+.ave{ cursor:help; }                       /* signals the hover tooltip on A/E cards */
+.ave-bar{ position:relative; height:10px; background:var(--panel); border:1px solid var(--border);
+  border-radius:2px; margin:9px 2px 8px; }               /* flat qualitative band (single colour) */
+.ave-bar-fill{ position:absolute; left:0; top:0; bottom:0; border-radius:2px; transition:width .5s ease; }
+.ave.good .ave-bar-fill{ background:var(--pos); }
+.ave.warn .ave-bar-fill{ background:var(--warn); }
+.ave.bad  .ave-bar-fill{ background:var(--neg); }
+/* Power BI feasibility: target marker is a plain vertical line (removed the CSS marker pin) */
+.ave-tick{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--txt); }
+/* Power BI feasibility: status = conditional-formatting text colour only (no pill container) */
+.ave-status{ font-size:12px; font-weight:700; margin-top:6px; }
+.ave.good .ave-status{ color:var(--pos); }
+.ave.warn .ave-status{ color:#b45309; }
+.ave.bad  .ave-status{ color:var(--neg); }
+
+/* Power BI feasibility: single multi-category Bullet Chart (OKViz pattern) — product
+   rows stacked in ONE bordered visual (the card), separated by thin dividers, each with a
+   thin conditional-formatting left accent. Replaces the 6 separate .ave cards on Overview. */
+.bullet-chart{ display:flex; flex-direction:column; }
+.bullet-row{ display:grid; grid-template-columns:160px 1fr; align-items:center; gap:16px;
+  padding:11px 6px 11px 12px; border-left:3px solid var(--txt-faint);
+  border-bottom:1px solid var(--border-soft); cursor:help; }
+.bullet-row:last-child{ border-bottom:none; }
+.bullet-row.good{ border-left-color:var(--pos); }
+.bullet-row.warn{ border-left-color:var(--warn); }
+.bullet-row.bad{  border-left-color:var(--neg); }
+.bullet-row .br-label{ font-size:12.5px; font-weight:600; color:var(--txt); }
+.bullet-row .br-body{ min-width:0; }
+.bullet-row .ave-bar{ margin:0; }                    /* flat qualitative band, no card margin */
+.bullet-row .br-meta{ display:flex; justify-content:space-between; align-items:baseline;
+  gap:14px; flex-wrap:wrap; margin-top:6px; }
+.bullet-row .br-meta .ave-detail{ font-size:11px; color:var(--txt-dim); }
+.bullet-row .br-meta .ave-status{ margin-top:0; }
+.bullet-row.good .ave-bar-fill{ background:var(--pos); }
+.bullet-row.warn .ave-bar-fill{ background:var(--warn); }
+.bullet-row.bad  .ave-bar-fill{ background:var(--neg); }
+.bullet-row.good .ave-status{ color:var(--pos); }
+.bullet-row.warn .ave-status{ color:#b45309; }
+.bullet-row.bad  .ave-status{ color:var(--neg); }
+
+/* Power BI feasibility: native Smart Narrative AI visual — a text-only auto-generated summary.
+   Plain narrative sentences with data-bound numeric values highlighted in bold navy (the way
+   Smart Narrative distinguishes dynamic values from static text). No chart, icons or badges. */
+.narrative{ font-size:13px; line-height:1.6; color:var(--txt); }
+.narrative b{ color:var(--navy); font-weight:700; }
+.tag{ font-size:9px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; padding:2px 6px; border-radius:4px; }
+.tag.good{ color:var(--pos); background:rgba(22,163,74,.12); }
+.tag.warn{ color:#b45309; background:rgba(245,158,11,.15); }
+.tag.bad{ color:var(--neg); background:rgba(220,38,38,.12); }
+/* Day-4: severity chips for Referral Workbench (grey Incomplete Info, dark Fraud) */
+.tag.info{ color:var(--txt-dim); background:var(--panel-2); border:1px solid var(--border); }
+.tag.dark{ color:#fff; background:#7f1d1d; }
+
+/* Day-4: STP processing funnel (Overview) — reuses navy/green/amber/red tokens */
+.stp-funnel{ display:flex; flex-direction:column; align-items:center; gap:0; padding:8px 0 4px; }
+.fnl-bar{ height:42px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:700; font-size:13px; box-shadow:var(--shadow); transition:width .5s ease; white-space:nowrap; }
+.fnl-bar .fnl-sub{ font-weight:600; font-size:11px; opacity:.85; margin-left:8px; }
+/* Power BI feasibility: removed between-bar drop-off text (.fnl-rate) and the
+   Approved/Referred/Rejected summary cards (.funnel-branch/.fnl-out) — funnel shows stages only. */
+
+/* Day-4: Referral Workbench priority rows */
+.wb-list{ display:flex; flex-direction:column; gap:14px; }
+.wb-row{ display:grid; grid-template-columns:190px 1fr 44px; align-items:center; gap:12px; }
+.wb-cat{ font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.wb-track{ height:12px; background:var(--panel-2); border-radius:999px; overflow:hidden; }
+.wb-fill{ height:100%; border-radius:999px; transition:width .5s ease; }
+.wb-count{ text-align:right; font-weight:700; font-variant-numeric:tabular-nums; font-size:14px; color:var(--navy); }
+
+/* Tables — Lead review: navy header row, white bold text, striped rows */
+.tbl-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; }
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+thead th{ text-align:left; font-weight:700; font-size:10px; letter-spacing:.05em; text-transform:uppercase;
+  color:#fff; background:var(--navy); padding:11px 12px; white-space:nowrap; cursor:pointer; }
+thead th.no-sort{ cursor:default; }
+tbody td{ padding:10px 12px; border-bottom:1px solid var(--border-soft); }
+tbody tr:nth-child(even){ background:var(--panel-2); }
+tbody tr:hover{ background:var(--orange-soft); }
+/* Power BI feasibility: removed .src-field subtext + .pill-sm product badge — cells are plain text now */
+.num{ text-align:right; font-variant-numeric:tabular-nums; }
+.mini-bar{ height:7px; border-radius:999px; background:var(--navy); }
+/* Power BI feasibility: removed Trend-column styling (.trend-ind) — column dropped */
+/* Power BI feasibility: native-style Matrix/Table Total row — bold, shaded, top border */
+tbody tr.total-row{ font-weight:700; background:var(--panel-2); border-top:2px solid var(--navy); }
+tbody tr.total-row td{ border-bottom:none; }
+tbody tr.total-row:hover{ background:var(--panel-2); }
+
+/* Sliders */
+.sliders{ display:grid; grid-template-columns:1fr 1fr; gap:20px 26px; }
+.slider-block .sb-top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+.slider-block .sb-lbl{ font-weight:600; font-size:13px; }
+.slider-block .sb-val{ font-weight:600; font-size:14px; color:var(--accent-strong); }
+.slider-block .sb-help{ font-size:10.5px; color:var(--txt-dim); margin-top:6px; line-height:1.35; }
+.slider-block .sb-range{ font-size:10px; color:var(--txt-faint); display:flex; justify-content:space-between; margin-top:4px; }
+input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px; background:var(--panel-2); outline:none; }
+input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%;
+  background:var(--accent); cursor:pointer; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.2); }
+input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; border:2px solid #fff; background:var(--accent); cursor:pointer; }
+
+.result-strip{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:6px; }
+.result{ background:var(--panel-2); border:1px solid var(--border-soft); border-radius:12px 0 12px 0; padding:14px; }
+.result .r-lbl{ font-size:11px; color:var(--txt-dim); font-weight:600; }
+/* Power BI feasibility: native KPI Card look — big bold navy value + small plain-colored delta */
+.result .r-val{ font-size:26px; font-weight:700; color:var(--navy); margin:6px 0 3px; }
+.result .r-delta{ font-size:11.5px; font-weight:600; }
+/* Loss Ratio Impact — two plain percentages side by side (Baseline → Simulated), no "pp" */
+.result .r-lr-pair{ font-size:14px; font-weight:600; color:var(--txt-dim); margin:8px 0 3px; line-height:1.4; }
+.result .r-lr-pair b{ font-weight:700; }
+
+/* Power BI feasibility: What-If Sensitivity Curve control (plain select) + Decomposition Tree */
+.wi-select{ font-family:inherit; font-size:12.5px; padding:6px 9px; border:1px solid var(--border);
+  border-radius:4px; background:#fff; color:var(--txt); }
+/* Power BI feasibility: rebuilt as a native left-to-right branching tree — plain white bordered
+   node boxes (small rounded corners, no fill/shadow/gradient), thin grey elbow connectors,
+   per-node "+" expand with a dimension picker. Columns fan out one per drill level. */
+.dtree{ overflow-x:auto; overflow-y:hidden; }
+.dt-canvas{ position:relative; }
+.dt-conn{ position:absolute; left:0; top:0; pointer-events:none; }
+.dt-box{ position:absolute; box-sizing:border-box; background:#fff; border:1px solid #d5d9e2; border-radius:6px;
+  padding:7px 9px; min-height:50px; display:flex; align-items:center; gap:6px; }
+.dt-box-root{ border-top:3px solid var(--navy); }          /* thin accent strip distinguishes the root */
+.dt-box-body{ flex:1; min-width:0; }
+.dt-box-name{ font-size:12px; font-weight:600; color:var(--txt); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dt-box-val{ font-size:13px; font-weight:700; color:var(--navy); }
+.dt-box-pct{ font-size:11px; font-weight:600; color:var(--txt-faint); }
+.dt-box-root .dt-box-name{ font-size:10.5px; font-weight:600; color:var(--txt-dim); }
+.dt-box-root .dt-box-val{ font-size:18px; }
+.dt-plus{ flex:0 0 20px; width:20px; height:20px; border:1px solid var(--border); border-radius:4px;
+  background:var(--panel); color:var(--navy); font-weight:700; font-size:13px; line-height:1; cursor:pointer; }
+.dt-plus:hover{ border-color:var(--navy); background:var(--panel-2); }
+.dt-fieldlbl{ position:absolute; font-size:9px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:var(--txt-faint); }
+.dt-colhdr{ position:absolute; }
+.dt-dim{ font-family:inherit; font-size:11.5px; font-weight:600; padding:3px 6px; border:1px solid var(--border);
+  border-radius:4px; background:#fff; color:var(--navy); max-width:100%; cursor:pointer; }
+.dt-empty{ color:var(--txt-faint); padding:12px 2px; font-style:italic; }
+
+/* Power BI feasibility: drill-through affordance — plain navy link, no badge/pill */
+.drill-link{ font-family:inherit; font-size:11px; font-weight:700; color:var(--navy); background:none;
+  border:none; padding:0; cursor:pointer; }
+.drill-link:hover{ color:var(--orange); text-decoration:underline; }
+tr.leak-drill{ cursor:pointer; }
+tr.leak-drill:hover{ background:var(--orange-soft); }
+
+/* Lead review: Treemap color legend — plain small chips + text, no border/shadow */
+.tm-legend{ display:flex; gap:16px; margin:2px 0 8px; font-size:11px; color:var(--txt-dim); }
+.tm-legend .tm-key{ display:inline-flex; align-items:center; gap:5px; }
+.tm-legend i{ width:10px; height:10px; border-radius:2px; display:inline-block; }
+
+.empty{ text-align:center; color:var(--txt-faint); padding:34px 20px; font-size:13px;
+  border:1px dashed var(--border); border-radius:12px; background:var(--panel-2); }
+
+/* Collapsible explanation panel */
+.explain{ border:1px solid var(--border); border-radius:12px; background:var(--panel-2); margin-bottom:16px; overflow:hidden; }
+.explain summary{ cursor:pointer; padding:12px 16px; font-weight:600; font-size:13px; list-style:none;
+  display:flex; align-items:center; gap:8px; }
+.explain summary::-webkit-details-marker{ display:none; }
+.explain summary .chev{ transition:.2s; color:var(--accent); }
+.explain[open] summary .chev{ transform:rotate(90deg); }
+.explain .ex-body{ padding:0 16px 14px; font-size:12.5px; color:var(--txt-dim); }
+.explain .ex-body ul{ margin:6px 0 0 18px; } .explain .ex-body li{ margin-bottom:6px; }
+.explain .ex-body b{ color:var(--txt); }
+
+/* Insights cards */
+/* Power BI feasibility: reflowed Key Insights cards into a consistent 3x2 fixed-size grid —
+   fixed columns + fixed row height so all 6 cards share the same dimensions regardless of text
+   length (matching fixed-size Card/Text Box placement on a Power BI canvas, not a wrapping flex). */
+.insight-grid{ display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:150px; gap:14px; }
+.insight{ background:var(--panel); border:1px solid var(--border-soft); border-left:4px solid var(--accent);
+  border-radius:12px 0 12px 0; padding:15px 16px; box-shadow:var(--shadow); overflow:hidden; }
+.insight.pos{ border-left-color:var(--pos); } .insight.warn{ border-left-color:var(--warn); }
+.insight .i-tag{ font-size:9px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; color:var(--txt-faint); }
+.insight p{ margin-top:7px; font-size:13px; line-height:1.4; }
+
+/* Lead review: corrected section order — standalone page-specific button bar (after KPIs, before charts) */
+.page-toggles{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+.page-toggles .pt-label{ font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--txt-faint); }
+
+/* toggle group (distribution role legacy + trend metric switch) */
+.toggle-group{ display:inline-flex; flex-wrap:wrap; gap:4px; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:3px; }
+.toggle-group button{ font-family:inherit; font-size:11.5px; font-weight:600; color:var(--txt-dim);
+  background:transparent; border:none; padding:7px 12px; border-radius:8px; cursor:pointer; }
+.toggle-group button.active{ background:var(--accent); color:#fff; }
+
+.scope-badge{ display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:600; padding:8px 14px; border-radius:999px; }
+.scope-badge.full{ background:var(--accent-soft); border:1px solid var(--accent); color:var(--accent-strong); }
+.scope-badge.scoped{ background:rgba(245,158,11,.14); border:1px solid var(--warn); color:#b45309; }
+
+/* ============================================================
+   OVERLAYS — Info modal (Lead review: slide-out Filter Pane removed;
+   filter controls now live in the top bar)
+   ============================================================ */
+.overlay{ position:fixed; inset:0; background:rgba(26,26,46,.35); z-index:90; display:none; }
+.overlay.show{ display:block; }
+
+/* Modal (info) */
+.modal{ position:fixed; top:50%; left:50%; transform:translate(-50%,-48%); z-index:100;
+  width:560px; max-width:92vw; max-height:84vh; overflow-y:auto; background:var(--panel);
+  border-radius:16px; box-shadow:var(--shadow-lg); display:none; }
+.modal.show{ display:block; }
+.modal-h{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--panel); }
+.modal-h h3{ font-size:16px; font-weight:600; }
+.modal-body{ padding:18px 20px; font-size:12.5px; color:var(--txt-dim); }
+.modal-body h4{ color:var(--txt); font-size:12px; text-transform:uppercase; letter-spacing:.05em; margin:16px 0 7px; }
+.modal-body h4:first-child{ margin-top:0; }
+.modal-body dl{ display:grid; grid-template-columns:auto 1fr; gap:5px 14px; }
+.modal-body dt{ font-weight:600; color:var(--txt); } .modal-body dd{ color:var(--txt-dim); }
+.close-x{ cursor:pointer; border:none; background:var(--panel-2); border-radius:8px; width:30px; height:30px; font-size:16px; color:var(--txt-dim); }
+
+/* Lead review: remove open items (open-items panel CSS removed) */
+
+/* Footer */
+.footer{ position:fixed; bottom:0; left:0; right:0; z-index:40; display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:9px 24px; font-size:11px; color:var(--txt-faint); background:var(--panel); border-top:1px solid var(--border); }
+.footer .sep{ opacity:.4; } .footer .conf{ margin-left:auto; color:var(--txt-dim); }
+
+/* Responsive */
+@media (max-width:1100px){
+  .kpi-row{ grid-template-columns:repeat(3,1fr); }
+  .g-3{ grid-template-columns:1fr; }
+  .ave-grid{ grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width:820px){
+  .g-2{ grid-template-columns:1fr; }
+  .sliders{ grid-template-columns:1fr; }
+  .kpi-row{ grid-template-columns:repeat(2,1fr); }
+  .result-strip{ grid-template-columns:1fr; }
+  .wb-row{ grid-template-columns:130px 1fr 40px; }        /* Day-4 */
+  .bullet-row{ grid-template-columns:110px 1fr; gap:12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Lead review: sidebar navigation layout (DataSuite Portal style) -->
+<!-- ================= TOP BAR (navy gradient) ================= -->
+<div class="topbar">
+  <!-- Lead review: replaced placeholder icon with Sapiens logo/wordmark
+       (text wordmark per option b — the SharePoint logo image is auth-gated;
+       swap this span for an <img src="…sapiens-logo.svg"> when the asset is available) -->
+  <span class="sapiens-wordmark" role="img" aria-label="Sapiens">sapiens<span class="spn-dot"></span></span>
+  <span class="topbar-divider"></span>
+  <span class="app-name">UW STP Dashboard</span>
+  <div class="topbar-right">
+    <!-- Lead review: full filter pane trigger — Filter icon then Info icon, grouped -->
+    <button class="tb-icon" id="filterBtn" title="Filters" aria-label="Open filter panel">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg>
+    </button>
+    <button class="tb-icon" id="infoBtn" title="About this dashboard">&#8505;</button>
+  </div>
+</div>
+
+<!-- Lead review: full filter pane (Period, Product, LOB, Premium Range, Decision Status, Company, High Value) matching Claims Dashboard pattern -->
+<div class="filter-panel" id="filterPanel">
+  <button class="fp-close" id="fpClose" aria-label="Close filters">×</button>
+  <div class="fp-grid">
+    <div class="fp-col">
+      <div class="fp-card">
+        <span class="fp-label">Period Selection</span>
+        <div class="fp-radios" id="fPeriod">
+          <label><input type="radio" name="per" value="TODAY"> Today</label>
+          <label><input type="radio" name="per" value="WTD"> WTD</label>
+          <label><input type="radio" name="per" value="MTD"> MTD</label>
+          <label><input type="radio" name="per" value="QTD"> QTD</label>
+          <label><input type="radio" name="per" value="YTD" checked> YTD</label>
+          <label><input type="radio" name="per" value="CUSTOM"> Custom Selection</label>
+        </div>
+        <div class="fp-custom" id="fpCustom">
+          <input type="date" id="dtFrom" value="2024-01-01"><span style="color:var(--txt-faint)">→</span><input type="date" id="dtTo" value="2024-06-30">
+        </div>
+      </div>
+      <div class="fp-card"><span class="fp-label">Product</span><select id="fProduct"></select></div>
+      <div class="fp-card"><span class="fp-label">LOB (Line of Business)</span><select id="fLob"></select></div>
+    </div>
+    <div class="fp-col">
+      <!-- Lead review: removed Premium/Sum Assured Range and High Value Submissions fields -->
+      <div class="fp-card"><span class="fp-label">Decision Status</span>
+        <select id="fDecision"><option value="all">All</option><option>Pass</option><option>Refer</option><option>Decline</option></select></div>
+      <div class="fp-card"><span class="fp-label">Distribution Channel / Company</span><select id="fCompany"></select></div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- ================= LEFT SIDEBAR ================= -->
+  <aside class="sidebar">
+    <!-- Lead review: logged-in-as role switcher moved to top of sidebar -->
+    <div class="rls-box">
+      <span class="rls-label">Logged in as</span>
+      <select id="roleSel">
+        <option value="chief">Chief Underwriter (Full P&amp;C)</option>
+        <option value="brokerA">Broker — Region A</option>
+        <option value="brokerB">Broker — Region B</option>
+        <option value="uwmCP">UW Manager — Commercial Property</option>
+      </select>
+    </div>
+    <div class="side-divider"></div>
+    <nav class="nav" id="navMenu">
+      <!-- Day-4: What-If promoted to position 2 (Overview stays default landing tab);
+           Referral Workbench + Risk Leakage added; final IA order below. -->
+      <button class="navlink active" data-tab="overview" data-title="Overview">Overview</button>
+      <button class="navlink" data-tab="whatif" data-title="What-If Simulation">What-If Simulation</button>
+      <button class="navlink" data-tab="drivers" data-title="Referral Drivers">Referral Drivers</button>
+      <button class="navlink" data-tab="workbench" data-title="Referral Workbench">Referral Workbench</button>
+      <button class="navlink" data-tab="leakage" data-title="Risk Leakage">Risk Leakage</button>
+      <button class="navlink" data-tab="dist" data-title="Distribution">Distribution</button>
+      <button class="navlink" data-tab="trend" data-title="Trends">Trends</button>
+      <button class="navlink" data-tab="insights" data-title="Insights">Insights</button>
+    </nav>
+  </aside>
+
+  <!-- ================= MAIN CONTENT AREA ================= -->
+  <main class="main">
+    <h1 class="page-title" id="pageTitle">Overview</h1>
+    <!-- Lead review: active filters strip relocated to top of main content, pinned -->
+    <div class="active-filters" id="activeFilters"></div>
+    <!-- KPI band -->
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="content">
+
+  <!-- ============================================================
+       TAB 1 — OVERVIEW
+       ============================================================ -->
+  <div class="tabpanel active" id="tab-overview">
+
+    <!-- Day-4: STP Processing Funnel — directly below the (global) KPI band. Volumes derive
+         from the same filtered submission set as the KPIs, so it stays consistent with the
+         Submission Volume / STP Approval Rate cards.
+         Power BI feasibility: removed Key Influencers visual.
+         Power BI feasibility: added native Smart Narrative AI visual (auto-generated text
+         summary with dynamic bolded values) beside the funnel — g-3 gives the funnel ~66%
+         and Smart Narrative ~33% of the row. -->
+    <div class="grid g-3" style="margin:0 0 16px;">
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5731</span><h3>STP Processing Funnel</h3></div><span class="sub">Submissions → Eligibility → Rules Engine → Outcome</span></div>
+        <div id="stpFunnel"></div>
+        <div class="caption">Business question: where in the automated pipeline do submissions drop off, and what pushes a risk to a human underwriter? Hover a stage for drop-off reasons.</div>
+      </div>
+
+      <!-- Power BI feasibility: native Smart Narrative AI visual (auto-generated text summary
+           with dynamic bolded values) beside the funnel. Text-only — no chart, icons or badges;
+           the embedded numbers + top drop-off rules recompute with the Period + RLS filters.
+           Illustrative figures (MOCK). -->
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5731</span><h3>Smart Narrative</h3></div><span class="sub">Auto-generated · AI (mock)</span></div>
+        <p class="narrative" id="stpNarrative">—</p>
+        <div class="caption">Updated automatically as filters change.</div>
+      </div>
+    </div>
+
+    <!-- Day-4 (Part 3b): removed the Decision Split donut (duplicated the funnel's terminal
+         branches) and the full-size "STP Trend Over Time" panel (duplicated the Trends tab).
+         STP trajectory now lives as a sparkline inside the STP Approval Rate KPI card above. -->
+
+    <div class="grid g-2">
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>STP by Product &amp; LOB</h3></div><span class="sub">Green ≥ 55% · Amber below</span></div>
+        <div class="chart-wrap tall"><canvas id="barProduct"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>Actual vs Expected — Loss Ratio</h3></div><span class="sub">By product line · hover a row for detail</span></div>
+        <!-- Power BI feasibility: single multi-category Bullet Chart visual (was a 6-card grid) -->
+        <div class="bullet-chart" id="aveGrid"></div>
+        <!-- Day-4 (Part 3a): cross-link footnote to the Risk Leakage tab -->
+        <div class="caption">A/E &gt; 1.0 on STP-approved business may indicate risk leakage — see the <strong>Risk Leakage</strong> tab for live cases.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 2 — REFERRAL DRIVERS
+       ============================================================ -->
+  <div class="tabpanel" id="tab-drivers">
+    <!-- Lead review: removed Referral Share by Rule chart, redundant with sorted table —
+         the table (sortable desc by % of Total) already surfaces the biggest STP blockers.
+         Table now full-width. Power BI feasibility: flattened source-field subtext to a cell
+         tooltip, product pill → plain text, dropped Trend column, added native-style Total row. -->
+    <div class="card">
+      <div class="card-h"><div><span class="eyebrow">DAT-5563</span><h3>Top Referral-Driver Rules</h3></div><span class="sub">Sortable · RLS + filter aware</span></div>
+      <div class="tbl-wrap">
+        <table id="driverTable">
+          <thead>
+            <tr>
+              <th data-sort="rule">Rule / Source field</th>
+              <th data-sort="product">Product</th>
+              <th data-sort="count" class="num">Referrals</th>
+              <th data-sort="pct" class="num">% of total</th>
+            </tr>
+          </thead>
+          <tbody id="driverBody"></tbody>
+        </table>
+      </div>
+      <!-- Lead review: caption clarifying the % calculation + Total-row footnote -->
+      <div class="caption">% of total referred submissions attributable to this rule (rule referral count ÷ all referred submissions in scope). Totals may exceed 100% where a submission triggers multiple rules.</div>
+    </div>
+
+    <!-- Lead review: removed Exception Reasons table, redundant with Distribution chart —
+         the chart is now the single, full-width source for exception data (Exception Count
+         metric + DAT-5734 moved here). -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-h"><div><span class="eyebrow">DAT-5734</span><h3>Exception Reasons — Distribution</h3></div><span class="sub">Exception Count 252 · count by reason</span></div>
+      <div class="chart-wrap tall"><canvas id="barException"></canvas></div>
+      <div class="caption">Count of STP exceptions by reason — highlights the biggest automation gaps.</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB — REFERRAL WORKBENCH (Day-4) — operational queue view
+       (Referral Drivers = why referrals happen; Workbench = what's in my
+        queue right now). Shares the global KPI strip for consistency.
+       ============================================================ -->
+  <div class="tabpanel" id="tab-workbench">
+    <div class="grid g-2">
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5732</span><h3>Pending Referrals by Priority</h3></div><span class="sub">Live queue snapshot</span></div>
+        <div class="wb-list" id="wbPriority"></div>
+        <div class="caption">Business question: which referrals sitting in my queue need attention first?</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5733</span><h3>Aging Buckets</h3></div><span class="sub">Referral Turnaround 2.8d avg · Green → Red as age rises</span></div>
+        <div class="chart-wrap"><canvas id="barRefAging"></canvas></div>
+        <div class="caption">Business question: how long are referrals waiting, and what is breaching turnaround targets?</div>
+      </div>
+    </div>
+    <!-- Day-4: mock summary line, same italic caption style as other tabs -->
+    <div class="caption" id="wbSummary" style="margin-top:14px;">—</div>
+  </div>
+
+  <!-- ============================================================
+       TAB — RISK LEAKAGE (Day-4) — governance / risk-quality view.
+       Distinct concern from referrals; owns its own tab.
+       ============================================================ -->
+  <div class="tabpanel" id="tab-leakage">
+    <div id="leakMain">
+    <!-- Power BI feasibility: removed colored badge/pill styling on status labels, flattened to plain text
+         (Adverse = red text, Monitor = amber text — no fill/pill/border; thin card left-accent kept). -->
+    <div class="grid g-2" style="margin-bottom:16px;">
+      <div class="card">
+        <!-- Lead review: Risk Leakage tab now respects selected Period filter instead of being hardcoded to Today -->
+        <div class="card-h"><div><span class="eyebrow">DAT-5735</span><h3>Risk Leakage Alerts</h3></div><span class="sub" id="leakPeriodLbl">—</span></div>
+        <div class="ave-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="ave bad"><div class="ave-lbl">Risk Leakage Cases</div>
+            <div class="ave-ratio" id="leakCases">8</div>
+            <div class="ave-detail">bad risks auto-approved</div>
+            <div class="ave-status">Adverse</div>
+            <div style="margin-top:8px;"><button type="button" class="drill-link" data-drill="fn">See details ›</button></div></div>
+          <div class="ave warn"><div class="ave-lbl">Potential Exposure</div>
+            <div class="ave-ratio" id="leakExposure">$450K</div>
+            <div class="ave-detail">aggregate at-risk premium</div>
+            <div class="ave-status">Monitor</div>
+            <div style="margin-top:8px;"><button type="button" class="drill-link" data-drill="fn">See details ›</button></div></div>
+        </div>
+        <div class="caption">Risk leakage = bad risks getting automatically approved.</div>
+      </div>
+      <div class="card">
+        <!-- Day-4: False Negative / False Positive rates land here (ideal-layout secondary metric) -->
+        <div class="card-h"><div><span class="eyebrow">DAT-5736</span><h3>STP Model Quality</h3></div><span class="sub">Decision accuracy</span></div>
+        <div class="ave-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="ave warn"><div class="ave-lbl">False Negative Rate</div><div class="ave-ratio" id="fnRate">1.8%</div>
+            <div class="ave-detail">bad risks auto-passed as good — drives leakage</div>
+            <div style="margin-top:8px;"><button type="button" class="drill-link" data-drill="fn">See details ›</button></div></div>
+          <div class="ave good"><div class="ave-lbl">False Positive Rate</div><div class="ave-ratio" id="fpRate">4.2%</div>
+            <div class="ave-detail">good risks referred needlessly — extra manual load</div>
+            <div style="margin-top:8px;"><button type="button" class="drill-link" data-drill="fp">See details ›</button></div></div>
+        </div>
+        <div class="caption">Business question: is the STP engine mis-classifying risks — and in which direction?</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div><span class="eyebrow">DAT-5736</span><h3>Monitored Leakage Categories</h3></div><span class="sub">Cases · exposure ($) · click a row to drill through</span></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th class="no-sort">Category</th><th class="no-sort num">Cases</th><th class="no-sort num">Exposure</th><th class="no-sort"></th></tr></thead>
+          <tbody id="leakBody"></tbody>
+        </table>
+      </div>
+      <div class="caption">Bad risks getting automatically approved — monitored for governance and model-retraining feedback.</div>
+    </div>
+    </div><!-- /leakMain -->
+
+    <!-- Power BI feasibility: added native-style Drill Through to case-level detail page -->
+    <div id="leakDetail" style="display:none;">
+      <button class="btn" id="leakBack" style="margin-bottom:14px;">← Back to Risk Leakage</button>
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5735</span><h3 id="leakDetailTitle">Risk Leakage Detail</h3></div><span class="sub" id="leakDetailScope">—</span></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th class="no-sort">Case / Submission ID</th><th class="no-sort">Product</th>
+              <th class="no-sort">Category / Reason</th><th class="no-sort num">Premium</th>
+              <th class="no-sort num">Risk Score</th><th class="no-sort">Date Approved</th>
+              <th class="no-sort">Assigned Underwriter</th>
+            </tr></thead>
+            <tbody id="leakDetailBody"></tbody>
+          </table>
+        </div>
+        <div class="caption">Case-level detail for the drill-through selection, filtered to the current RLS scope and selected period. Mock data — POC.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 3 — WHAT-IF SIMULATION
+       ============================================================ -->
+  <div class="tabpanel" id="tab-whatif">
+    <!-- Lead review: moved parameter explanation into Info popover, removed from page
+         (see the "What-If Simulation — Parameter Reference" section in the ℹ️ Info modal).
+         Sliders and cards now move up to fill the freed space. -->
+
+    <div class="grid g-2">
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5563-C</span><h3>Rule Thresholds</h3></div><span class="sub">Live recompute</span></div>
+        <div class="sliders">
+          <div class="slider-block">
+            <div class="sb-top"><span class="sb-lbl">STP Premium Limit</span><span class="sb-val" id="v-prem">£75k</span></div>
+            <input type="range" id="s-prem" min="25000" max="150000" step="2500" value="75000">
+            <div class="sb-range"><span>£25k</span><span>£150k</span></div>
+            <div class="sb-help">↑ limit → STP Rate ↑, GWP ↑, Loss Ratio may ↑ (larger risks pass).</div>
+          </div>
+          <div class="slider-block">
+            <div class="sb-top"><span class="sb-lbl">Max Prior Loss Ratio</span><span class="sb-val" id="v-lr">70%</span></div>
+            <input type="range" id="s-lr" min="40" max="100" step="1" value="70">
+            <div class="sb-range"><span>40%</span><span>100%</span></div>
+            <div class="sb-help">↑ ceiling → STP Rate ↑, but Loss Ratio ↑ (worse-history risks pass).</div>
+          </div>
+          <div class="slider-block">
+            <div class="sb-top"><span class="sb-lbl">NatCat Exclusion Radius</span><span class="sb-val" id="v-nc">10 km</span></div>
+            <input type="range" id="s-nc" min="0" max="40" step="1" value="10">
+            <div class="sb-range"><span>0 km</span><span>40 km</span></div>
+            <div class="sb-help">↓ radius → STP Rate ↑, but catastrophe exposure &amp; Loss Ratio ↑.</div>
+          </div>
+          <div class="slider-block">
+            <div class="sb-top"><span class="sb-lbl">Risk-Score Ceiling</span><span class="sb-val" id="v-rs">65</span></div>
+            <input type="range" id="s-rs" min="30" max="100" step="1" value="65">
+            <div class="sb-range"><span>30</span><span>100</span></div>
+            <div class="sb-help">↑ ceiling → STP Rate ↑, modest Loss Ratio ↑ (marginal risks pass).</div>
+          </div>
+        </div>
+        <!-- Lead review: removed Save Scenario button -->
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button class="btn" id="resetScenarioBtn">Reset to baseline</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5563-C</span><h3>Projected Impact</h3></div><span class="sub">vs historical baseline (scope-aware)</span></div>
+        <!-- Power BI feasibility: Projected Impact cards/chart aligned to native KPI Card + Clustered Column Chart -->
+        <!-- Lead review: replaced ambiguous "pp" with submission count (New STP Rate) and baseline/simulated percentages (Loss Ratio Impact) -->
+        <div class="result-strip">
+          <div class="result"><div class="r-lbl">New STP Rate</div><div class="r-val" id="r-stp">—</div><div class="r-delta" id="r-stp-d">—</div></div>
+          <div class="result"><div class="r-lbl">Loss Ratio Impact</div><div class="r-lr-pair" id="r-lr">—</div></div>
+          <div class="result"><div class="r-lbl">Add’l GWP / mo</div><div class="r-val" id="r-gwp">—</div><div class="r-delta">newly-STP risks</div></div>
+        </div>
+        <div class="chart-wrap" style="margin-top:8px;"><canvas id="barSim"></canvas></div>
+        <div class="caption">Baseline (grey) vs Simulated (navy) for each KPI — bars show which metric moves and by how much under the current thresholds.</div>
+      </div>
+    </div>
+
+    <!-- Power BI feasibility: added native Line Chart Sensitivity Curve (full parameter range
+         sweep with current-position and target reference lines) -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-h"><div><span class="eyebrow">DAT-5563-C</span><h3>Sensitivity Curve</h3></div><span class="sub">Full-range sweep · AI (mock)</span></div>
+      <div class="page-toggles" style="margin-bottom:12px;">
+        <span class="pt-label">Show sensitivity for</span>
+        <select id="sensParamSel" class="wi-select">
+          <option value="prem">STP Premium Limit</option>
+          <option value="lr">Max Prior Loss Ratio</option>
+          <option value="nc">NatCat Exclusion Radius</option>
+          <option value="rs">Risk-Score Ceiling</option>
+        </select>
+      </div>
+      <div class="chart-wrap tall"><canvas id="sensChart"></canvas></div>
+      <div class="caption">Shows how STP Rate and Loss Ratio move across the full range of the selected parameter — find the point where gains start costing too much.</div>
+    </div>
+
+    <!-- Power BI feasibility: added native Decomposition Tree visual for exploring
+         newly-qualifying business composition -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-h"><div><span class="eyebrow">DAT-5563-C</span><h3>Newly-Qualifying Business Breakdown</h3></div><span class="sub">Decomposition tree · AI (mock)</span></div>
+      <div class="dtree" id="decompTree"></div>
+      <div class="caption">Explore which segments make up the business that would newly pass STP under the current simulated thresholds — use before committing to a rule change.</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 4 — DISTRIBUTION (channel-focused, RLS, swapped layout)
+       ============================================================ -->
+  <div class="tabpanel" id="tab-dist">
+    <!-- Lead review: added Channel Concentration Risk card (portfolio roll-up, top of tab) -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>Channel Concentration Risk</h3></div><span class="sub" id="distScopeNoteC">Full book</span></div>
+      <div id="concVal" style="font-size:24px;font-weight:700;color:var(--navy);margin:2px 0 2px;">—</div>
+      <!-- Lead review: Channel Concentration card now shows auditable GWP basis -->
+      <div id="concBasis" style="font-size:12px;color:var(--txt-dim);margin-bottom:4px;">—</div>
+      <div id="concFlag" style="font-size:12px;font-weight:600;">—</div>
+      <div class="caption">Business question: are we over-reliant on any single distribution channel?</div>
+    </div>
+
+    <div class="grid g-2">
+      <!-- Lead review: Loss Ratio cards moved to LEFT (was right) -->
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>Loss Ratio by Channel</h3></div><span class="sub" id="distScopeNoteL">Full book</span></div>
+        <!-- Power BI feasibility: replaced 5 cards with sortable Matrix/Table + Total row -->
+        <div class="tbl-wrap">
+          <table id="channelTable">
+            <thead><tr>
+              <th data-sort="name">Channel</th>
+              <th data-sort="gwp" class="num">GWP</th>
+              <th data-sort="lossRatio" class="num">Loss Ratio %</th>
+              <th data-sort="stp" class="num">STP %</th>
+              <th data-sort="override" class="num">Override Rate %</th>
+              <th class="no-sort">Status</th>
+            </tr></thead>
+            <tbody id="channelBody"></tbody>
+          </table>
+        </div>
+        <!-- Day-4: STP Portfolio Loss Ratio secondary metric (ideal-layout list) -->
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding-top:10px;border-top:1px solid var(--border-soft);font-size:12px;">
+          <span style="color:var(--txt-dim);font-weight:600;">STP Portfolio Loss Ratio</span>
+          <span style="font-weight:700;color:var(--navy);"><b id="stpPortLR">—</b> <span style="color:var(--txt-faint);font-weight:400;">GWP-weighted, STP-bound</span></span>
+        </div>
+        <div class="caption">Business question: how does loss-ratio performance differ across distribution channels?</div>
+        <!-- Lead review: added Underwriter Override Rate by Channel column (now a Matrix column) -->
+        <div class="caption">Share of STP-approved decisions later overridden by an underwriter — a high rate signals a channel's business may need more scrutiny than automation is giving it.</div>
+      </div>
+      <!-- Power BI feasibility: replaced donut with native Treemap (size = GWP, color = Loss Ratio risk) -->
+      <div class="card">
+        <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>GWP Distribution by Channel — sized by premium, colored by risk</h3></div><span class="sub" id="distScopeNoteR">Full book</span></div>
+        <!-- Lead review: added color legend to Treemap -->
+        <div class="tm-legend">
+          <span class="tm-key"><i style="background:var(--pos)"></i>On target</span>
+          <span class="tm-key"><i style="background:var(--warn)"></i>Near target</span>
+          <span class="tm-key"><i style="background:var(--neg)"></i>Above target</span>
+        </div>
+        <div class="chart-wrap tall"><canvas id="treeChannel"></canvas></div>
+        <div class="caption">Larger boxes = more premium volume. Red/amber boxes = channels running above loss-ratio target — flags where size and risk overlap.</div>
+      </div>
+    </div>
+
+    <!-- Lead review: added Time-to-Decision by Channel bar chart with SLA reference line -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>Time-to-Decision by Channel</h3></div><span class="sub" id="distScopeNoteT">Full book</span></div>
+      <div class="chart-wrap"><canvas id="ttdChannel"></canvas></div>
+      <div class="caption">Average submission-to-decision time by channel, against the 2.0-day SLA target — flags channels sending business that takes longer to process.</div>
+    </div>
+
+    <!-- Lead review: added Loss Ratio by Region bar chart as new dimension -->
+    <div class="card" id="regionCard" style="margin-top:16px;">
+      <div class="card-h"><div><span class="eyebrow">DAT-5565</span><h3>Loss Ratio by Region</h3></div><span class="sub">Full book · mock geography</span></div>
+      <div class="chart-wrap"><canvas id="regionChart"></canvas></div>
+      <div class="caption">Business question: does loss-ratio performance vary by region, independent of distribution channel?</div>
+      <div class="caption">Regional mapping pending confirmation of source data granularity.</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 5 — TREND (multi-metric toggle set, RLS)
+       ============================================================ -->
+  <div class="tabpanel" id="tab-trend">
+    <!-- Lead review: corrected section order (tabs -> active filters -> KPIs -> page buttons -> charts):
+         page-specific view toggle now sits in its own bar ABOVE the chart card. -->
+    <div class="page-toggles">
+      <span class="pt-label">View</span>
+      <!-- Lead review: metric toggle set for underwriter-relevant trends -->
+      <div class="toggle-group" id="trendToggle">
+        <button data-m="stp" class="active">STP Rate</button>
+        <button data-m="vol">Submission Volume</button>
+        <button data-m="ref">Referral Rate</button>
+        <button data-m="dec">Exception/Decline</button>
+        <button data-m="ttd">Time-to-Decision</button>
+        <button data-m="prod">Product Line Perf.</button>
+        <button data-m="tva">Target vs Actual</button>
+        <button data-m="uw">UW Comparison</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">
+        <div><span class="eyebrow">DAT-5565</span><h3 id="trendTitle">STP Rate Trend</h3></div>
+      </div>
+      <div class="chart-wrap tall"><canvas id="trendMain"></canvas></div>
+      <div class="caption" id="trendCaption">STP rate by month vs the 55% target line.</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 6 — INSIGHTS (renamed from Governance Log)
+       ============================================================ -->
+  <div class="tabpanel" id="tab-insights">
+    <!-- Lead review: removed Scenario Change Log (no longer populated after Save Scenario button removal) -->
+    <div class="card">
+      <div class="card-h"><div><span class="eyebrow">DAT-5563</span><h3>Key Insights</h3></div><span class="sub">Auto-generated (mock) · scope-aware</span></div>
+      <div class="insight-grid" id="insightGrid"></div>
+    </div>
+  </div>
+
+    </div><!-- /content -->
+  </main>
+</div><!-- /layout -->
+
+<!-- Lead review: filter controls moved into top bar (no avatar) — slide-out Filter Pane removed -->
+<div class="overlay" id="overlay"></div>
+
+<!-- ================= INFO MODAL ================= -->
+<!-- Lead review: Info button — data source, last refresh, metric definitions, scope -->
+<div class="modal" id="infoModal">
+  <div class="modal-h"><h3>ℹ️ About this dashboard</h3><button class="close-x" id="infoClose">×</button></div>
+  <div class="modal-body">
+    <h4>Data &amp; refresh</h4>
+    <dl>
+      <dt>Data source</dt><dd>Mock/sample dataset embedded in-page (POC — no source system connected).</dd>
+      <dt>Last refresh</dt><dd id="lastRefresh">—</dd>
+      <dt>Data as at</dt><dd>30 Jun 2024 (illustrative)</dd>
+      <dt>Scope</dt><dd>P&amp;C new-business submissions, subject to RLS role entitlement.</dd>
+    </dl>
+    <h4>Key metric definitions</h4>
+    <dl>
+      <dt>STP Approval Rate</dt><dd>Submissions auto-decisioned end-to-end ÷ total submissions. Card subtext shows the absolute count of STP-approved submissions in scope.</dd>
+      <dt>SLA Compliance Rate</dt><dd>Share of submissions decided within the 3.0-day Time-to-Decision SLA. Sub-line shows the count of breaches of the tighter 2.0-day target (coloured by whether breaches rose vs prior).</dd>
+      <dt>Referral Rate</dt><dd>Submissions routed to a human underwriter ÷ total submissions.</dd>
+      <dt>Time-to-Decision</dt><dd>Mean days from submission receipt to bind/refer/decline.</dd>
+      <dt>Submission Volume</dt><dd>Count of new-business submissions in the selected period.</dd>
+      <dt>Manual Review Queue</dt><dd>Open referrals currently awaiting an underwriter (snapshot). Detailed on the Referral Workbench tab.</dd>
+      <dt>Risk Leakage Count</dt><dd>Bad risks auto-approved by STP today, with aggregate at-risk premium. Detailed on the Risk Leakage tab.</dd>
+      <dt>Premium Processed via STP</dt><dd>Gross written premium auto-bound without a human, £m, RLS- and period-scaled.</dd>
+      <dt>Loss Ratio</dt><dd>Incurred losses ÷ earned premium (GWP-weighted). Shown on What-If, Insights, Distribution and the Overview Actual-vs-Expected cards.</dd>
+    </dl>
+    <h4>Scope notes</h4>
+    <dl>
+      <dt>RLS</dt><dd>The “Logged in as” role restricts every visual to that role’s entitled book.</dd>
+      <dt>Granularity</dt><dd>Reporting granularity is a placeholder pending source-system confirmation.</dd>
+    </dl>
+    <!-- Lead review: moved parameter explanation into Info popover, removed from page -->
+    <h4>What-If Simulation — Parameter Reference</h4>
+    <ul style="margin:6px 0 0 18px;">
+      <li><b>STP Premium Limit</b> — the max premium a submission can carry and still auto-decision. Controls how large a risk the engine will pass without a human. <i>Raising it → more submissions qualify → STP Rate ↑, but average risk size ↑ → Loss Ratio may ↑ and additional GWP ↑.</i></li>
+      <li><b>Max Prior Loss Ratio</b> — ceiling on the applicant's historical loss ratio for STP eligibility. <i>Raising it → admits higher-loss accounts → STP Rate ↑ but Loss Ratio ↑.</i></li>
+      <li><b>NatCat Exclusion Radius</b> — minimum distance from a modelled NatCat hazard required to auto-pass. <i>Lowering it → fewer exclusions → STP Rate ↑, but catastrophe exposure ↑ → Loss Ratio ↑.</i></li>
+      <li><b>Risk-Score Ceiling</b> — highest composite risk score still eligible for STP. <i>Raising it → more marginal risks auto-pass → STP Rate ↑ with some Loss Ratio ↑.</i></li>
+    </ul>
+    <!-- Lead review: remove open items (info popover open-items section removed) -->
+  </div>
+</div>
+
+<!-- ================= FOOTER ================= -->
+<div class="footer">
+  <span><strong>UW STP Dashboard</strong> v4.0-POC (Day-4)</span>
+  <span class="sep">|</span><span>Data as at 30 Jun 2024</span>
+  <span class="sep">|</span><span>Build: DAT-5715 · scope DAT-5565 / DAT-5563 · Day-4 DAT-5731–5736</span>
+  <span class="conf">Confidential — Sapiens internal. Mock data, not for distribution.</span>
+</div>
+<div class="mock-badge">Mock data — POC</div>
+
+<script>
+/* ================================================================
+   Lead review: sidebar navigation layout — navy/orange palette.
+   Structural series navy/orange-led; amber warn; green/red data deltas.
+   ================================================================ */
+const C = {
+  navy:'#1a2456', orange:'#e8622c',
+  accent:'#1a2456', accentSoft:'rgba(26,36,86,.10)', warn:'#f59e0b',
+  pos:'#16a34a', neg:'#dc2626', indigo:'#6366f1', sky:'#0ea5e9',
+  rose:'#f43f5e', slate:'#64748b', grey:'#94a3b8',
+  txt:'#1a2038', dim:'#5b6478', faint:'#8a93a8', grid:'rgba(26,26,46,0.07)'
+};
+const SEQ = [C.navy, C.orange, C.indigo, C.sky, C.warn, C.slate];
+const TARGET = 55, SLA_TTD = 3.0, LOSS_TARGET = 60;
+// Lead review: Loss Ratio KPI replaced with SLA Breaches KPI — 2.0-day Time-to-Decision
+// SLA threshold per the requirement docs (distinct from the 3-day line on the Trend chart).
+const SLA_BREACH_THRESHOLD = 2.0;
+
+Chart.defaults.font.family = "'DM Sans','Segoe UI',sans-serif";
+Chart.defaults.color = C.dim;
+Chart.defaults.font.size = 11;
+
+/* ================================================================
+   MOCK DATA — products carry region + LOB for RLS + filters
+   ================================================================ */
+const MONTHS = ['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+
+const PRODUCTS = [
+  { name:'Commercial Property',        code:'CP',  lob:'Property',    region:'Region A', stp:58, lossActual:57, lossExpected:60, referrals:412, subs:1840, gwp:14.2, ttd:2.4 },
+  { name:'Commercial Liability',       code:'CL',  lob:'Casualty',    region:'Region B', stp:47, lossActual:63, lossExpected:58, referrals:365, subs:1520, gwp:9.8,  ttd:3.1 },
+  { name:'Motor Fleet',                code:'MF',  lob:'Motor',       region:'Region A', stp:61, lossActual:66, lossExpected:62, referrals:298, subs:2110, gwp:18.6, ttd:2.1 },
+  { name:'Marine Cargo',               code:'MC',  lob:'Marine',      region:'Region B', stp:44, lossActual:55, lossExpected:57, referrals:187, subs:760,  gwp:6.1,  ttd:3.4 },
+  { name:'Construction / Engineering', code:'CE',  lob:'Engineering', region:'Region B', stp:38, lossActual:61, lossExpected:59, referrals:241, subs:640,  gwp:7.4,  ttd:3.8 },
+  { name:'SME Package',                code:'SME', lob:'Package',     region:'Region A', stp:64, lossActual:52, lossExpected:56, referrals:520, subs:3240, gwp:11.9, ttd:1.9 },
+];
+
+// Distribution channels (carry region for RLS)  — Lead review: channel-focused
+// Day-5: added `override` (% of STP-approved decisions later overridden by an underwriter) and
+// `ttd` (avg submission-to-decision days). GWP-weighted override ≈ 6.4% (ties to the Insights tab).
+const CHANNELS = [
+  { name:'Direct',              region:'Region A', gwp:12.4, lossRatio:54, stp:63, override:3.2, ttd:1.8 },
+  { name:'National Brokers',    region:'Region A', gwp:21.8, lossRatio:59, stp:55, override:7.4, ttd:2.3 },
+  { name:'Regional Agencies',   region:'Region B', gwp:9.6,  lossRatio:64, stp:46, override:9.2, ttd:3.1 },
+  { name:'MGA Partners',        region:'Region B', gwp:7.2,  lossRatio:61, stp:49, override:7.6, ttd:2.7 },
+  { name:'Affinity / Partnerships', region:'Region A', gwp:6.9, lossRatio:56, stp:58, override:4.2, ttd:2.0 },
+];
+
+const decision = { pass:52, refer:33, decline:15 };
+
+// Referral rules — Lead review: source field + prior-period share for trend
+// Day-5: added `factor` (short readable label) — reused by the Smart Narrative visual for top drop-off names
+const RULES = [
+  { rule:'Prior loss ratio > 70%',          field:'prior_loss_ratio',    factor:'Prior Loss Ratio > 70%',         product:'Commercial Liability',       count:412, prevShare:14.1 },
+  { rule:'TIV above STP premium limit',      field:'total_insured_value', factor:'TIV above STP limit',            product:'Commercial Property',        count:388, prevShare:16.0 },
+  { rule:'NatCat flood zone < 10km',         field:'natcat_distance_km',  factor:'NatCat Flood Zone < 10km',       product:'Commercial Property',        count:341, prevShare:10.5 },
+  { rule:'Risk score above ceiling',         field:'composite_risk_score',factor:'Risk Score above ceiling',       product:'Construction / Engineering', count:305, prevShare:12.4 },
+  { rule:'Fleet size > 25 vehicles',         field:'fleet_count',         factor:'Fleet Size > 25 vehicles',       product:'Motor Fleet',                count:277, prevShare:11.2 },
+  { rule:'Cargo accumulation limit breach',  field:'accumulation_value',  factor:'Cargo Accumulation limit breach',product:'Marine Cargo',               count:214, prevShare:8.9  },
+  { rule:'Sanctioned trade route',           field:'trade_route_code',    factor:'Sanctioned Trade Route',         product:'Marine Cargo',               count:168, prevShare:6.2  },
+  { rule:'Undisclosed prior claims',         field:'claims_disclosure',   factor:'Undisclosed Prior Claims',       product:'SME Package',                count:151, prevShare:6.4  },
+  { rule:'Contract value > threshold',       field:'contract_value',      factor:'Contract Value > threshold',     product:'Construction / Engineering', count:139, prevShare:5.9  },
+  { rule:'Occupancy hazard grade 4+',        field:'occupancy_grade',     factor:'Occupancy Hazard grade 4+',      product:'SME Package',                count:122, prevShare:4.6  },
+];
+
+// Historical policies for What-If recompute (deterministic mock)
+function buildPolicies(n){
+  const out=[]; let s=12345; const rand=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+  for(let i=0;i<n;i++){
+    const p=PRODUCTS[Math.floor(rand()*PRODUCTS.length)];
+    out.push({ product:p.name, premium:Math.round((10000+rand()*90000)/1000)*1000,
+      priorLoss:Math.round(30+rand()*55), natCatKm:Math.round(rand()*40),
+      riskScore:Math.round(30+rand()*50), annualPremium:Math.round(8000+rand()*90000) });
+  }
+  return out;
+}
+const POLICIES = buildPolicies(240);
+
+/* ================================================================
+   Lead review: submission-level mock dataset — lets every filter
+   (premium range, decision status, company, high-value…) actually
+   change the KPIs / charts. ~1/10 scale of the aggregate volumes.
+   ================================================================ */
+const SCALE = 10;                 // each record ≈ 10 real submissions
+function buildSubmissions(){
+  const out=[]; let s=98765; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+  PRODUCTS.forEach(p=>{
+    const n=Math.round(p.subs/SCALE);
+    const chs=CHANNELS.filter(c=>c.region===p.region);
+    const refRate=p.referrals/p.subs;
+    for(let i=0;i<n;i++){
+      const r=rnd(); let decision,stp=false,referred=false;
+      if(r < p.stp/100){ decision='Pass'; stp=true; }
+      else if(r < p.stp/100 + refRate){ decision='Refer'; referred=true; }
+      else { decision='Decline'; }
+      const premium=Math.round((10000 + Math.pow(rnd(),2)*490000)/1000)*1000; // £10k–£500k, low-skewed
+      const company=chs.length? chs[Math.floor(rnd()*chs.length)].name : CHANNELS[0].name;
+      const lossRatio=Math.max(20,Math.min(120,Math.round(p.lossActual+(rnd()-0.5)*14)));
+      const ttd=Math.max(0.5,+(p.ttd+(rnd()-0.5)*1.2).toFixed(1));
+      out.push({ product:p.name, lob:p.lob, region:p.region, premium, decision, stp, referred, company, lossRatio, ttd });
+    }
+  });
+  return out;
+}
+const SUBMISSIONS = buildSubmissions();
+// Day-4: full-book denominators for snapshot metrics (queue, leakage) so RLS scoping scales them
+const TOTAL_STP      = SUBMISSIONS.filter(s=>s.stp).length || 1;
+const TOTAL_REFERRED = SUBMISSIONS.filter(s=>s.referred).length || 1;
+
+/* ================================================================
+   Lead review: RLS role definitions (filter every tab)
+   ================================================================ */
+const ROLES = {
+  chief:   { label:'Full P&C Portfolio',              region:null,        products:null,                  channelRegion:null },
+  brokerA: { label:"Scoped View — Broker Region A's Book", region:'Region A', products:null,              channelRegion:'Region A' },
+  brokerB: { label:"Scoped View — Broker Region B's Book", region:'Region B', products:null,              channelRegion:'Region B' },
+  uwmCP:   { label:'Scoped View — Commercial Property', region:null,        products:['Commercial Property'], channelRegion:'Region A' },
+};
+
+/* ================================================================
+   Global UI state
+   ================================================================ */
+// Lead review: filter pane — single-value filters (premium/high-value removed)
+const state = {
+  role:'chief', period:'YTD',
+  product:'all', lob:'all', decision:'all', company:'all',
+  trendMetric:'stp'
+};
+
+// Lead review: added Today/WTD period options — chronological shortest→longest.
+// subFactor = fraction of the annual mock volume attributed to the period.
+const _now=new Date();
+const _daysSinceMon=((_now.getDay()+6)%7)+1; // 1=Mon … 7=Sun (days elapsed this week incl. today)
+const PERIODS = {
+  TODAY: { label:'Today',          subFactor:1/365,             gran:'Daily'   },
+  WTD:   { label:'WTD',            subFactor:_daysSinceMon/365, gran:'Daily'   },
+  MTD:   { label:'MTD',            subFactor:1/12,              gran:'Daily'   },
+  QTD:   { label:'QTD',            subFactor:0.25,              gran:'Weekly'  },
+  YTD:   { label:'YTD',            subFactor:0.5,               gran:'Monthly' },
+  L12M:  { label:'Last 12 Months', subFactor:1,                 gran:'Monthly' },
+  CUSTOM:{ label:'Custom Range',   subFactor:0.3,               gran:'Daily'   },
+};
+
+// RLS-entitled products (ignores UI product/LOB filter) — used to reset pane
+function entitledProducts(){
+  const r=ROLES[state.role];
+  return PRODUCTS.filter(p=> (!r.region || p.region===r.region) && (!r.products || r.products.includes(p.name)));
+}
+// Visible products = RLS ∩ product ∩ LOB
+function visibleProducts(){
+  return entitledProducts().filter(p=>
+    (state.product==='all' || p.name===state.product) &&
+    (state.lob==='all' || p.lob===state.lob));
+}
+// Distribution channels: RLS ∩ company filter
+function visibleChannels(){
+  const r=ROLES[state.role];
+  return CHANNELS.filter(c=> (!r.channelRegion || c.region===r.channelRegion) &&
+    (state.company==='all' || c.name===state.company));
+}
+function visiblePolicies(){
+  const names=new Set(visibleProducts().map(p=>p.name));
+  return POLICIES.filter(p=> names.has(p.product));
+}
+
+// Lead review: central filtered submission set — applies EVERY filter field
+function filteredSubmissions(){
+  const entNames=new Set(entitledProducts().map(p=>p.name));
+  return SUBMISSIONS.filter(s=>
+    entNames.has(s.product) &&
+    (state.product==='all' || s.product===state.product) &&
+    (state.lob==='all' || s.lob===state.lob) &&
+    (state.decision==='all' || s.decision===state.decision) &&
+    (state.company==='all' || s.company===state.company)
+  );
+}
+
+/* ================================================================
+   KPI computation (5 KPIs) — Lead review
+   ================================================================ */
+function weighted(list, valKey, wKey){
+  const w=list.reduce((s,p)=>s+p[wKey],0)||1;
+  return list.reduce((s,p)=>s+p[valKey]*p[wKey],0)/w;
+}
+function renderKpis(){
+  // Lead review: KPIs now computed from the filtered submission set, so every
+  // filter field (premium range, decision status, company, high-value…) moves them.
+  const arr=filteredSubmissions();
+  const pf=PERIODS[state.period].subFactor;
+  const cnt=arr.length;
+  const mean=k=> cnt? arr.reduce((s,x)=>s+x[k],0)/cnt : 0;
+  const stp=cnt? arr.filter(x=>x.stp).length/cnt*100 : 0;
+  const refRate=cnt? arr.filter(x=>x.referred).length/cnt*100 : 0;
+  const ttd=mean('ttd');
+  const subs=Math.round(cnt*SCALE*pf);
+
+  // Lead review: STP Rate renamed to STP Approval Rate with approval count subtext.
+  // Absolute count of STP-approved submissions in the current RLS scope + period
+  // (stp_flag records, scaled to real volume). Recomputes with every filter.
+  const approved=Math.round(arr.filter(x=>x.stp).length*SCALE*pf);
+  const approvedSub=`<span class="delta" style="color:var(--txt);font-weight:700;">${approved.toLocaleString()} approved</span>`;
+
+  // Day-4: "SLA Breaches" reframed as "SLA Compliance Rate" (%) per ideal-layout list.
+  // Compliance = share meeting the 3.0-day SLA; breach COUNT (2.0-day target, existing
+  // calc) is kept as the sub-line so no data is lost.
+  const compliance=cnt? arr.filter(x=>x.ttd<=SLA_TTD).length/cnt*100 : 0;
+  const breaches=Math.round(arr.filter(x=>x.ttd>SLA_BREACH_THRESHOLD).length*SCALE*pf);
+  // Prior period ran ~6% more breaches (TTD has been improving); derived so it stays filter-aware.
+  const priorBreaches=Math.round(breaches/0.94);
+  const breachDelta=breaches-priorBreaches;
+  const worse=breachDelta>0;                 // more breaches than prior = worse
+  // Sub-line shows the breach count; coloured by whether breaches rose (up = bad here).
+  let compSub;
+  if(breachDelta===0){
+    compSub=`<span class="delta"><span class="vs">${breaches.toLocaleString()} breaches · no change</span></span>`;
+  } else {
+    const cls=worse?'down':'up';             // .down = red (--neg), .up = green (--pos)
+    compSub=`<span class="delta ${cls}">${worse?'▲':'▼'} ${breaches.toLocaleString()} breaches <span class="vs">vs prior period</span></span>`;
+  }
+
+  // Day-4: new ideal-layout KPIs.
+  // Manual Review Queue — snapshot (not period-scaled); scales with the referral book in scope.
+  // Summed from the same REF_PRIORITY categories the Workbench renders, so the two always tie.
+  const queueFrac=arr.filter(x=>x.referred).length/TOTAL_REFERRED;
+  const queue=REF_PRIORITY.reduce((s,p)=>s+Math.round(p.n*queueFrac),0);
+  const agedQueue=Math.round(18*queueFrac);   // matches Workbench ">5 Days" aging bucket (18)
+  const queueSub=`<span class="delta" style="color:var(--txt-dim);font-weight:600;">${agedQueue} aged &gt; 5 days</span>`;
+  // Risk Leakage Count — "today" snapshot; summed from the same LEAK_CATS the Risk Leakage tab renders.
+  const leakFrac=arr.filter(x=>x.stp).length/TOTAL_STP;
+  const leakCount=LEAK_CATS.reduce((s,k)=>s+Math.round(k.n*leakFrac),0);
+  const leakExp=LEAK_CATS.reduce((s,k)=>s+Math.round(k.exp*leakFrac),0);
+  const leakSub=`<span class="delta down">≈ $${leakExp}K <span class="vs">exposure today</span></span>`;
+  // Premium Processed via STP — GWP auto-bound, £m, period-scaled and RLS-aware.
+  const premStp=visibleProducts().reduce((s,p)=>s+p.gwp*p.stp/100,0)*pf;
+
+  // KPI defs: value + subtext. customSub overrides the standard "delta vs prior" line.
+  const K=[
+    { lbl:'STP Approval Rate',    val:stp.toFixed(0)+'%',            customSub:approvedSub, src:'stp_flag ÷ submission_id — subtext = count(stp_flag)', spark:true },
+    { lbl:'SLA Compliance Rate',  val:compliance.toFixed(1)+'%',     customSub:compSub,     src:'share meeting 3.0-day SLA — sub-line = 2.0-day breach count' },
+    { lbl:'Referral Rate',        val:refRate.toFixed(1)+'%',        delta:-2.1, unit:'pp', good:'down', src:'manual_referral_flag ÷ submission_id' },
+    { lbl:'Avg Time-to-Decision', val:ttd.toFixed(1),suf:'<small> d</small>', delta:-0.4, unit:'d', good:'down', src:'decision_ts − received_ts (mean days)' },
+    { lbl:'Submission Volume',    val:subs.toLocaleString(),         delta:+3.1, unit:'%',  good:'up',   src:'count(submission_id) in period' },
+    { lbl:'Manual Review Queue',  val:queue.toLocaleString(),        customSub:queueSub,    src:'open manual-referral queue (snapshot, RLS-scoped)' },
+    { lbl:'Risk Leakage Count',   val:leakCount.toLocaleString(),    customSub:leakSub,     src:'bad risks auto-approved today — see Risk Leakage tab' },
+    { lbl:'Premium Processed via STP', val:'£'+premStp.toFixed(1)+'m', delta:+2.4, unit:'%', good:'up', src:'Σ(gwp × stp_rate) in scope × period factor' },
+  ];
+  const row=document.getElementById('kpiRow'); row.innerHTML='';
+  K.forEach(k=>{
+    let sub;
+    if(k.customSub){ sub=k.customSub; }
+    else {
+      const rising=k.delta>=0;
+      const isGood=(k.good==='up'&&rising)||(k.good==='down'&&!rising);
+      const dtxt=(rising?'+':'')+k.delta+(k.unit==='pp'?' pp':k.unit==='d'?' d':'%');
+      sub=`<span class="delta ${isGood?'up':'down'}">${rising?'▲':'▼'} ${dtxt}<span class="vs">vs prior</span></span>`;
+    }
+    // Day-4 (Part 3b): STP Approval Rate card carries an inline trajectory sparkline + trend link
+    const sparkHtml = k.spark
+      ? `<div class="kpi-spark"><canvas id="sparkStp"></canvas></div>
+         <button type="button" class="spark-link" data-goto="trend">View full trend →</button>`
+      : '';
+    // Lead review: hover tooltip clarifies source field/definition
+    row.insertAdjacentHTML('beforeend',`
+      <div class="kpi" title="Source: ${k.src}">
+        <span class="eyebrow">${k.lbl}</span>
+        <div class="k-num">${k.val}${k.suf||''}</div>
+        ${sub}
+        ${sparkHtml}
+        <span class="k-hint">src: ${k.src}</span>
+      </div>`);
+  });
+
+  // Day-4 (Part 3b): render the inline STP sparkline (same data as the Trends STP view;
+  // no axes/labels — just the line shape trending toward the 55% target).
+  if(CH.spark){ CH.spark.destroy(); CH.spark=null; }
+  const sparkEl=document.getElementById('sparkStp');
+  if(sparkEl){
+    CH.spark=new Chart(sparkEl,{
+      type:'line',
+      data:{ labels:MONTHS, datasets:[
+        { data:stpTrend, borderColor:C.accent, backgroundColor:C.accentSoft, fill:true, tension:.35, pointRadius:0, borderWidth:1.5 },
+        { data:MONTHS.map(()=>TARGET), borderColor:C.warn, borderDash:[4,3], pointRadius:0, borderWidth:1 } ]},
+      options:{ responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{ legend:{display:false}, tooltip:{enabled:false} },
+        scales:{ x:{display:false}, y:{display:false, min:20, max:60} } }});
+  }
+}
+
+/* ================================================================
+   Chart instance registry (destroy/recreate on state change)
+   ================================================================ */
+const CH={};
+// Destroy whatever Chart is bound to this canvas (keyed by canvas, not registry key)
+function reset(id){ const ex=Chart.getChart(id); if(ex) ex.destroy(); return document.getElementById(id); }
+
+/* ---- Overview: STP trend series (shared by the KPI-card sparkline + Trends tab) ----
+   Day-4 (Part 3b): the standalone Decision Split donut (renderDecision) and full-size
+   STP Trend Over Time panel (renderTrendMini) were removed — the funnel branches and the
+   KPI-card sparkline now cover that ground. The stpTrend data is retained for both. */
+const stpTrend=[29,31,33,34,37,39,41,43,46,48,50,52];
+function renderProductBar(){
+  // STP rate per product, from the filtered submission set
+  const arr=filteredSubmissions(); const list=visibleProducts();
+  const data=list.map(p=>{ const g=arr.filter(x=>x.product===p.name); return g.length? Math.round(g.filter(x=>x.stp).length/g.length*100):0; });
+  CH.prod=new Chart(reset('barProduct'),{
+    type:'bar',
+    data:{ labels:list.map(p=>p.name), datasets:[{ label:'STP %', data,
+      backgroundColor:data.map(v=>v>=TARGET?C.pos:C.warn), borderRadius:6, barThickness:20 }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{min:0,max:80,grid:{color:C.grid},ticks:{callback:v=>v+'%'}}, y:{grid:{display:false}} }}});
+}
+function renderAvE(){
+  const arr=filteredSubmissions();
+  const box=document.getElementById('aveGrid'); box.innerHTML='';
+  // Power BI feasibility: consolidated 6 individual cards into a single multi-category
+  // Bullet Chart visual (native OKViz Bullet Chart pattern, one visual with stacked category
+  // rows instead of 6 separate cards). Each row = Actual bar + vertical Expected target tick
+  // + flat qualitative band; status shown as plain colored text (Power BI KPI conditional
+  // formatting) instead of a FAVOURABLE/ADVERSE/ON PLAN pill badge; a thin conditional-format
+  // left accent + row divider separate categories. Exact A/E ratio + action live in the tooltip.
+  const SCALE_MAX=100;                       // bar track represents 0–100 loss-ratio points
+  const rows=visibleProducts().map(p=>{
+    const g=arr.filter(x=>x.product===p.name);
+    const actual=g.length? g.reduce((s,x)=>s+x.lossRatio,0)/g.length : 0;
+    const ratio=actual/p.lossExpected; let cls='good',t='Favourable';
+    if(ratio>1.05){cls='bad';t='Adverse';} else if(ratio>0.98){cls='warn';t='On plan';}
+    // delta % = (A/E − 1) × 100, rounded to whole number
+    const delta=Math.round((ratio-1)*100);
+    const dir = delta>0 ? `${delta}% above plan`
+              : delta<0 ? `${Math.abs(delta)}% below plan`
+                        : 'in line with plan';
+    const fillW=Math.min(100, actual/SCALE_MAX*100);
+    const tickL=Math.min(100, p.lossExpected/SCALE_MAX*100);
+    // Hover tooltip: exact A/E, what A/E means, and implied action
+    const aeExplain='A/E = actual loss ratio ÷ expected. 1.00 = exactly on plan; above 1.00 = worse than expected.';
+    const action = cls==='bad'  ? 'Action: may indicate risk leakage — check STP thresholds for this line (see Risk Leakage tab).'
+                 : cls==='warn' ? 'Action: within tolerance — monitor next period.'
+                                : 'Action: none needed — performing better than plan.';
+    const tip=`${p.name} — A/E ${ratio.toFixed(2)}&#10;${aeExplain}&#10;${action}`;
+    return `
+      <div class="bullet-row ${cls}" title="${tip}">
+        <div class="br-label">${p.name}</div>
+        <div class="br-body">
+          <div class="ave-bar">
+            <div class="ave-bar-fill" style="width:${fillW}%"></div>
+            <div class="ave-tick" style="left:${tickL}%" title="Expected ${p.lossExpected}%"></div>
+          </div>
+          <div class="br-meta">
+            <span class="ave-detail">Actual ${actual.toFixed(0)}% · Expected ${p.lossExpected}%</span>
+            <span class="ave-status">${t} — ${dir}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  box.innerHTML = rows || '<div class="empty">No product lines in scope.</div>';
+}
+
+/* ---- Overview: STP Processing Funnel (Day-4) ----
+   Volumes derive from the same filtered submission set + period factor as the
+   KPIs, so the top-of-funnel = Submission Volume and the outcome split matches
+   the Decision donut (≈ 56% approved / 19.6% referred). */
+function renderStpFunnel(){
+  const arr=filteredSubmissions(); const pf=PERIODS[state.period].subFactor;
+  const subs=Math.round(arr.length*SCALE*pf);
+  const elig=Math.round(subs*0.92);                 // Submissions → Eligibility 92%
+  const rules=Math.round(elig*0.85);                // Eligibility → Rules Engine 85%
+  const w=v=> subs? Math.max(10,Math.round(v/subs*100)) : 10;
+  const stages=[
+    { lbl:'Submissions',      val:subs,  width:100,      col:C.navy },
+    { lbl:'Eligibility Checks',val:elig, width:w(elig),  col:'#2d3a7a', rate:'92%', drop:subs-elig, why:'incomplete documents · KYC / sanctions fail · out of appetite' },
+    { lbl:'STP Rules Engine', val:rules, width:w(rules), col:'#3d4a95', rate:'85%', drop:elig-rules, why:'automated rule failures — see Referral Drivers' },
+  ];
+  // Power BI feasibility: funnel visual can't show inline drop-off text between bars —
+  // pass %, dropped count and reason moved into each stage's hover tooltip.
+  let html='<div class="stp-funnel">';
+  stages.forEach((s,i)=>{
+    const tip = i>0
+      ? `${s.lbl}: ${s.val.toLocaleString()}&#10;${s.rate} pass · ${s.drop.toLocaleString()} dropped&#10;(${s.why})`
+      : `${s.lbl}: ${s.val.toLocaleString()}`;
+    html+=`<div class="fnl-bar" style="width:${s.width}%;background:${s.col}" title="${tip}">${s.lbl}<span class="fnl-sub">${s.val.toLocaleString()}</span></div>`;
+  });
+  html+='</div>';
+  // Power BI feasibility: removed the Approved/Referred/Rejected summary cards from Overview
+  // (not required here; a native funnel renders its stages only).
+  document.getElementById('stpFunnel').innerHTML=html;
+}
+
+/* ---- Overview: Smart Narrative (Day-5) ----
+   Power BI feasibility: removed Key Influencers visual.
+   Power BI feasibility: added native Smart Narrative AI visual (auto-generated text summary
+   with dynamic bolded values) beside the funnel. The embedded numbers reuse the SAME formulas
+   as renderStpFunnel (subs, 92% eligibility pass, 85% rules pass, drops) and the STP rate from
+   the KPI logic, so the narrative always agrees with the funnel. Top drop-off rule names come
+   from the scoped referral rules. Everything recomputes with the Period + RLS filters. */
+function renderSmartNarrative(){
+  const arr=filteredSubmissions();
+  const pf=PERIODS[state.period].subFactor;
+  const cnt=arr.length;
+  const subs=Math.round(cnt*SCALE*pf);          // = Submission Volume KPI / funnel top
+  const elig=Math.round(subs*0.92);             // Submissions → Eligibility 92% (matches funnel)
+  const rules=Math.round(elig*0.85);            // Eligibility → Rules Engine 85% (matches funnel)
+  const drop1=Math.max(0,subs-elig);
+  const drop2=Math.max(0,elig-rules);
+  const stp=cnt? Math.round(arr.filter(x=>x.stp).length/cnt*100) : 0;
+  const el=document.getElementById('stpNarrative');
+  if(!subs){ el.innerHTML='No submissions match the current filters, so there is nothing to summarise for this period.'; return; }
+  // Top drop-off contributors — by referral count in the scoped rule set (re-filters with RLS/product)
+  const names=currentRules().sort((a,b)=>b.count-a.count).slice(0,2).map(r=>r.factor||r.rule);
+  const contrib = names.length>=2 ? ` — the largest contributors being ${names[0]} and ${names[1]}`
+                : names.length===1 ? ` — the largest contributor being ${names[0]}`
+                : '';
+  const f=n=>n.toLocaleString();
+  // Bold = data-bound values (Power BI Smart Narrative highlights dynamic numbers vs static text)
+  el.innerHTML =
+    `Of <b>${f(subs)}</b> submissions received this period, <b>${f(elig)}</b> (<b>92%</b>) passed eligibility checks, `+
+    `with <b>${f(drop1)}</b> dropped due to incomplete documents, KYC/sanctions failures, or being out of appetite. `+
+    `Of those eligible, <b>${f(rules)}</b> (<b>85%</b>) cleared the STP rules engine, while <b>${f(drop2)}</b> `+
+    `were dropped by automated rule failures${contrib}. `+
+    `Overall, this represents an STP approval rate of <b>${stp}%</b> against the 55% target.`;
+}
+
+/* ---- Referral Drivers: Exception Reasons (Day-4) — fixed mock counts + mirrored bar ---- */
+const EXCEPTIONS=[
+  { r:'Risk Score Threshold Breach', n:125 },
+  { r:'Missing Documents',           n:60  },
+  { r:'Occupation Restriction',      n:35  },
+  { r:'High Sum Insured',            n:22  },
+  { r:'Fraud Flag',                  n:10  },
+];
+function renderException(){
+  // Lead review: removed Exception Reasons table, redundant with Distribution chart —
+  // this bar chart is now the single source for exception reasons + counts.
+  CH.exc=new Chart(reset('barException'),{
+    type:'bar',
+    data:{ labels:EXCEPTIONS.map(e=>e.r), datasets:[{ data:EXCEPTIONS.map(e=>e.n),
+      backgroundColor:EXCEPTIONS.map((_,i)=>SEQ[i%SEQ.length]), borderRadius:5, barThickness:16 }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>c.raw+' exceptions'}}},
+      scales:{ x:{grid:{color:C.grid}}, y:{grid:{display:false},ticks:{font:{size:10}}} }}});
+}
+
+/* ---- Referral Workbench (Day-4) — operational queue, RLS-scaled ---- */
+const REF_PRIORITY=[
+  { cat:'Critical Risk',         n:48, tagcls:'bad',  label:'Critical',   col:C.neg },
+  { cat:'High Premium',          n:74, tagcls:'warn', label:'High Premium',col:C.warn },
+  { cat:'Rule Failure',          n:96, tagcls:'warn', label:'Rule Failure',col:C.warn },
+  { cat:'Incomplete Information', n:82, tagcls:'info', label:'Incomplete', col:C.grey },
+  { cat:'Fraud Alert',           n:12, tagcls:'dark', label:'Fraud',      col:'#7f1d1d' },
+];
+const REF_AGING=[
+  { b:'0–1 Day', n:142, col:C.pos },
+  { b:'1–3 Days',n:98,  col:'#65a30d' },
+  { b:'3–5 Days',n:54,  col:C.warn },
+  { b:'>5 Days', n:18,  col:C.neg },
+];
+function renderWorkbench(){
+  const frac=filteredSubmissions().filter(x=>x.referred).length/TOTAL_REFERRED;
+  const scale=v=>Math.round(v*frac);
+  const pr=REF_PRIORITY.map(p=>({...p, val:scale(p.n)}));
+  const maxp=Math.max(1,...pr.map(p=>p.val));
+  // Power BI feasibility: bar chart can't render a pill badge beside the axis label —
+  // category shown as plain text, priority conveyed by the bar's own colour (data-color rule).
+  document.getElementById('wbPriority').innerHTML=pr.map(p=>`
+    <div class="wb-row">
+      <span class="wb-cat">${p.cat}</span>
+      <div class="wb-track"><div class="wb-fill" style="width:${Math.round(p.val/maxp*100)}%;background:${p.col}"></div></div>
+      <span class="wb-count">${p.val}</span>
+    </div>`).join('');
+  const ag=REF_AGING.map(a=>({...a, val:scale(a.n)}));
+  CH.aging=new Chart(reset('barRefAging'),{
+    type:'bar',
+    data:{ labels:ag.map(a=>a.b), datasets:[{ data:ag.map(a=>a.val),
+      backgroundColor:ag.map(a=>a.col), borderRadius:6, barThickness:40 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ y:{beginAtZero:true,grid:{color:C.grid}}, x:{grid:{display:false}} }}});
+  const total=pr.reduce((s,p)=>s+p.val,0);
+  const aged=ag[ag.length-1].val;
+  document.getElementById('wbSummary').textContent=`${total} referrals pending · ${aged} aged beyond 5 days`;
+}
+
+/* ---- Risk Leakage (Day-4) — governance view, RLS- + period-scaled ---- */
+const LEAK_CATS=[
+  { c:'High-risk policies approved by STP',            n:5, exp:210 },
+  { c:'High claim-probability policies auto-approved', n:2, exp:140 },
+  { c:'Policies generating post-bind issues',          n:1, exp:100 },
+];
+// Day-5: case-level pool behind the summary/table, used by the Drill-Through detail page.
+// FN (false-negative) cases = leakage (bad risks auto-approved), mapped to the monitored
+// categories; FP (false-positive) cases = good risks referred needlessly. Deterministic mock.
+const UWERS=['A. Chen','R. Patel','M. Okoye','S. Brenner','L. Ferreira','J. Mwangi'];
+function buildLeakCases(){
+  const out=[]; let s=246813; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+  const months=['2024-01','2024-02','2024-03','2024-04','2024-05','2024-06']; let seq=4100;
+  LEAK_CATS.forEach((cat,ci)=>{
+    const per=cat.exp*1000/cat.n;                         // premiums roughly sum to the category exposure
+    for(let i=0;i<cat.n;i++){
+      const prod=PRODUCTS[(ci+i)%PRODUCTS.length];
+      out.push({ id:'STP-24-'+(seq++), product:prod.name, cat:cat.c, reason:cat.c,
+        premium:Math.round(per*(0.8+rnd()*0.4)/1000)*1000,
+        risk:70+Math.round(rnd()*22),                      // 70–92 — bad risk that was auto-approved
+        date:months[Math.floor(rnd()*months.length)]+'-'+String(2+Math.floor(rnd()*26)).padStart(2,'0'),
+        uw:UWERS[(ci*2+i)%UWERS.length], cls:'FN' });
+    }
+  });
+  for(let i=0;i<6;i++){                                    // false positives (good risks referred needlessly)
+    const prod=PRODUCTS[(i*2)%PRODUCTS.length];
+    out.push({ id:'STP-24-'+(seq++), product:prod.name, cat:'Good risk referred needlessly',
+      reason:'Referred despite low risk score', premium:Math.round((20000+rnd()*60000)/1000)*1000,
+      risk:20+Math.round(rnd()*25), date:months[Math.floor(rnd()*months.length)]+'-'+String(2+Math.floor(rnd()*26)).padStart(2,'0'),
+      uw:UWERS[(i+3)%UWERS.length], cls:'FP' });
+  }
+  return out;
+}
+const LEAK_CASES=buildLeakCases();
+// Lead review: dynamic scope label reflecting the selected Period (no longer hardcoded to "Today")
+function leakScopeLabel(){
+  const p=state.period;
+  if(p==='TODAY') return 'Today';
+  if(p==='CUSTOM') return 'Custom range';
+  return (PERIODS[p]?.label||p)+' 2024';
+}
+function renderLeakage(){
+  // Lead review: now period-aware. periodMult scales the YTD-baseline figures to the selected
+  // period (YTD = full reference); RLS fraction narrows to the entitled book.
+  const periodMult=PERIODS[state.period].subFactor/PERIODS.YTD.subFactor;
+  const rlsFrac=filteredSubmissions().filter(x=>x.stp).length/TOTAL_STP;
+  const frac=rlsFrac*periodMult;
+  // exposure only counts where at least one case rounds in, so $ never shows with 0 cases
+  const cats=LEAK_CATS.map(k=>{ const n=Math.round(k.n*frac); return {...k, n, exp:n?Math.round(k.exp*frac):0}; });
+  document.getElementById('leakCases').textContent=cats.reduce((s,k)=>s+k.n,0);
+  document.getElementById('leakExposure').textContent='$'+cats.reduce((s,k)=>s+k.exp,0)+'K';
+  document.getElementById('leakPeriodLbl').textContent=leakScopeLabel();
+  // Model-quality rates: period-normalised metrics (a rate doesn't grow with period length);
+  // mild deterministic RLS-scope variation so they still recompute when the role changes.
+  const f=0.8+0.2*(entitledProducts().length/PRODUCTS.length);
+  document.getElementById('fnRate').textContent=(1.8*f).toFixed(1)+'%';
+  document.getElementById('fpRate').textContent=(4.2*f).toFixed(1)+'%';
+  document.getElementById('leakBody').innerHTML=cats.map(k=>
+    `<tr class="leak-drill" data-drill="cat" data-cat="${k.c}" title="Drill through to case-level detail">
+       <td>${k.c}</td><td class="num">${k.n}</td><td class="num">$${k.exp}K</td>
+       <td class="num"><span class="drill-link">Details ›</span></td></tr>`).join('')
+    || `<tr><td colspan="4" style="color:var(--txt-faint)">No leakage cases in current scope.</td></tr>`;
+  if(leakDrill) renderLeakDetail();          // keep an open drill-through page in sync
+}
+
+/* ---- Risk Leakage Drill-Through (Day-5) ----
+   Power BI feasibility: added native-style Drill Through to case-level detail page. Clicking a
+   card's "See details" or a category row filters LEAK_CASES to that selection, within the current
+   RLS scope and the FULL selected period (YTD = all), and swaps in a detail page with a back link. */
+let leakDrill=null;                          // { mode:'fn'|'fp'|'cat', cat }
+function leakCasesFor(){
+  const ent=new Set(entitledProducts().map(p=>p.name));
+  let list=LEAK_CASES.filter(c=>ent.has(c.product));
+  if(leakDrill.mode==='fp') list=list.filter(c=>c.cls==='FP');
+  else if(leakDrill.mode==='cat') list=list.filter(c=>c.cls==='FN'&&c.cat===leakDrill.cat);
+  else list=list.filter(c=>c.cls==='FN');
+  const mult=Math.min(1, PERIODS[state.period].subFactor/PERIODS.YTD.subFactor);  // full period; YTD=all
+  return list.slice(0, Math.max(0, Math.round(list.length*mult)));
+}
+function renderLeakDetail(){
+  if(!leakDrill) return;
+  const list=leakCasesFor();
+  const titleMap={ fn:'Risk Leakage Cases (false negatives)', fp:'False Positives (good risks referred needlessly)' };
+  document.getElementById('leakDetailTitle').textContent='Risk Leakage Detail — '+(leakDrill.mode==='cat'?leakDrill.cat:titleMap[leakDrill.mode]);
+  document.getElementById('leakDetailScope').textContent=leakScopeLabel()+' · '+list.length+' case'+(list.length===1?'':'s');
+  document.getElementById('leakDetailBody').innerHTML = list.length ? list.map(c=>`
+    <tr><td>${c.id}</td><td>${c.product}</td><td>${c.reason}</td>
+      <td class="num">£${(c.premium/1000).toFixed(0)}k</td><td class="num">${c.risk}</td>
+      <td>${c.date}</td><td>${c.uw}</td></tr>`).join('')
+    : `<tr><td colspan="7" style="color:var(--txt-faint)">No matching cases in the selected period (${leakScopeLabel()}).</td></tr>`;
+}
+function showLeakDetail(mode,cat){
+  leakDrill={mode,cat}; renderLeakDetail();
+  document.getElementById('leakMain').style.display='none';
+  document.getElementById('leakDetail').style.display='block';
+  window.scrollTo(0,0);
+}
+function backToLeak(){
+  leakDrill=null;
+  document.getElementById('leakDetail').style.display='none';
+  document.getElementById('leakMain').style.display='block';
+}
+document.getElementById('tab-leakage').addEventListener('click',e=>{
+  const d=e.target.closest('[data-drill]'); if(!d) return;
+  showLeakDetail(d.dataset.drill, d.dataset.cat||null);
+});
+document.getElementById('leakBack').addEventListener('click',backToLeak);
+
+/* ---- Referral Drivers: table (source field + trend) + %-bar ---- */
+let driverSort={key:'count',dir:-1};
+function currentRules(){
+  const names=new Set(visibleProducts().map(p=>p.name));
+  let list=RULES.filter(r=>names.has(r.product)).map(r=>({...r}));
+  const total=list.reduce((s,r)=>s+r.count,0)||1;
+  // Power BI feasibility: removed prior-period trend calc (Trend column dropped)
+  list.forEach(r=>{ r.pct=+(r.count/total*100).toFixed(1); });
+  return list;
+}
+function renderDrivers(){
+  let list=currentRules();
+  list.sort((a,b)=>{ let x=a[driverSort.key],y=b[driverSort.key];
+    return typeof x==='string'? driverSort.dir*x.localeCompare(y) : driverSort.dir*(x-y); });
+  // Power BI feasibility: table cells can't render pill badges or subtext lines —
+  // product shown as plain text, source field moved into the rule cell's tooltip,
+  // Trend column dropped entirely.
+  const rows = list.map(r=>`
+    <tr>
+      <td title="source: ${r.field}">${r.rule}</td>
+      <td>${r.product}</td>
+      <td class="num">${r.count.toLocaleString()}</td>
+      <td class="num">${r.pct}%</td>
+    </tr>`).join('');
+  // Power BI feasibility: added native-style Total row for Referrals and % of Total columns.
+  // Sums the filtered/RLS-scoped rule set and recomputes on every filter, like a real Matrix
+  // total (Product column left blank — Power BI totals don't aggregate text/category columns).
+  const totCount=list.reduce((s,r)=>s+r.count,0);
+  const totPct=+list.reduce((s,r)=>s+r.pct,0).toFixed(1);
+  const totalRow = list.length ? `
+    <tr class="total-row">
+      <td>Total</td><td></td>
+      <td class="num">${totCount.toLocaleString()}</td>
+      <td class="num">${totPct}%</td>
+    </tr>` : '';
+  document.getElementById('driverBody').innerHTML = (rows + totalRow)
+    || `<tr><td colspan="4" style="color:var(--txt-faint)">No rules in current scope.</td></tr>`;
+  // Lead review: removed Referral Share by Rule chart, redundant with sorted table (barDrivers gone).
+}
+document.querySelectorAll('#driverTable thead th[data-sort]').forEach(th=>{
+  th.addEventListener('click',()=>{ const k=th.dataset.sort;
+    if(driverSort.key===k) driverSort.dir*=-1; else { driverSort.key=k; driverSort.dir=(k==='rule'||k==='product')?1:-1; }
+    renderDrivers(); });
+});
+
+/* ---- What-If recompute (scope-aware baseline) ---- */
+const S={ prem:document.getElementById('s-prem'), lr:document.getElementById('s-lr'),
+          nc:document.getElementById('s-nc'), rs:document.getElementById('s-rs') };
+const DEFAULTS={ prem:75000, lr:70, nc:10, rs:65 };
+// Day-5: parameter metadata for the Sensitivity Curve sweep (same bounds as each slider)
+const WHATIF_PARAMS={
+  prem:{ label:'STP Premium Limit',     min:25000, max:150000, fmt:v=>'£'+Math.round(v/1000)+'k' },
+  lr:  { label:'Max Prior Loss Ratio',  min:40,    max:100,    fmt:v=>Math.round(v)+'%' },
+  nc:  { label:'NatCat Exclusion Radius',min:0,    max:40,     fmt:v=>Math.round(v)+' km' },
+  rs:  { label:'Risk-Score Ceiling',    min:30,    max:100,    fmt:v=>Math.round(v) },
+};
+let sensParam='prem';   // Sensitivity Curve defaults to the most recently adjusted parameter
+// Day-5: Decomposition Tree dimensions + interaction state
+const DECOMP_DIMS={
+  product:{ label:'Product Line',          of:p=>p.product },
+  risk:   { label:'Risk Score Band',       of:p=> p.riskScore>=70?'High (70+)': p.riskScore>=50?'Medium (50–69)':'Low (under 50)' },
+  natcat: { label:'NatCat Zone',            of:p=> p.natCatKm<10?'Near (under 10km)': p.natCatKm<=25?'Mid (10–25km)':'Far (25km+)' },
+  loss:   { label:'Prior Loss Ratio Band',  of:p=> p.priorLoss>=70?'High (70%+)': p.priorLoss>=50?'Medium (50–69%)':'Low (under 50%)' },
+};
+let decompState={ dim1:'product', open:{} };   // open: { level-1 node key → level-2 dimension }
+function firstDimExcept(d){ return Object.keys(DECOMP_DIMS).find(k=>k!==d) || d; }
+function stpUnder(th,pol){ let stp=0,gwp=0,ls=0,n=0;
+  pol.forEach(p=>{ if(p.premium<=th.prem&&p.priorLoss<=th.lr&&p.natCatKm>=th.nc&&p.riskScore<=th.rs){ stp++; gwp+=p.annualPremium; ls+=p.priorLoss; n++; }});
+  return { rate:+(stp/(pol.length||1)*100).toFixed(1), gwp, avgLoss:n?ls/n:0 }; }
+function recompute(){
+  const pol=visiblePolicies();
+  const base=stpUnder(DEFAULTS,pol);
+  const th={ prem:+S.prem.value, lr:+S.lr.value, nc:+S.nc.value, rs:+S.rs.value };
+  document.getElementById('v-prem').textContent='£'+(th.prem/1000)+'k';
+  document.getElementById('v-lr').textContent=th.lr+'%';
+  document.getElementById('v-nc').textContent=th.nc+' km';
+  document.getElementById('v-rs').textContent=th.rs;
+  const sim=stpUnder(th,pol);
+  const dStp=+(sim.rate-base.rate).toFixed(1);
+  const lrDelta=+((sim.avgLoss-base.avgLoss)*0.25).toFixed(1);
+  const gwpMonthly=(sim.gwp-base.gwp)/12;
+  document.getElementById('r-stp').textContent=sim.rate+'%';
+  // Lead review: replaced ambiguous "pp" with a plain COUNT of submissions that would newly
+  // qualify for STP under the simulated rule change — dStp (pp) × the period+RLS submission
+  // volume → an underwriter-readable count that recomputes live as the sliders move.
+  const pf=PERIODS[state.period].subFactor;
+  const subs=Math.round(filteredSubmissions().length*SCALE*pf);
+  const addlSubs=Math.round(dStp/100*subs);
+  const sd=document.getElementById('r-stp-d');
+  if(addlSubs===0){ sd.textContent='No change vs baseline'; sd.style.color=C.dim; }
+  else if(addlSubs>0){ sd.textContent='▲ +'+addlSubs.toLocaleString()+' submissions vs baseline'; sd.style.color=C.pos; }
+  else { sd.textContent='▼ '+Math.abs(addlSubs).toLocaleString()+' fewer submissions vs baseline'; sd.style.color=C.neg; }
+  // Lead review: Loss Ratio Impact — show two concrete percentages (Baseline → Simulated)
+  // instead of an abstract point-delta. Colour the Simulated value: red if worse (higher),
+  // green if better (lower), neutral/grey if unchanged.
+  const baseLR=base.avgLoss, simLR=sim.avgLoss;
+  const simColor = simLR>baseLR+0.05 ? C.neg : simLR<baseLR-0.05 ? C.pos : C.dim;
+  document.getElementById('r-lr').innerHTML=
+    `Baseline: ${baseLR.toFixed(1)}% &nbsp;→&nbsp; Simulated: <b style="color:${simColor}">${simLR.toFixed(1)}%</b>`;
+  const gEl=document.getElementById('r-gwp'); gEl.textContent=(gwpMonthly>=0?'+':'')+'£'+(gwpMonthly/1000).toFixed(0)+'k'; gEl.style.color=gwpMonthly>=0?C.pos:C.neg;
+  // Power BI feasibility: Projected Impact cards/chart aligned to native KPI Card + Clustered
+  // Column Chart — flat bar colours (grey Baseline, navy Simulated), simple legend, plain axes;
+  // removed rounded bar corners (not achievable on a native clustered column chart).
+  CH.sim=new Chart(reset('barSim'),{
+    type:'bar',
+    data:{ labels:['STP Rate %','Loss Ratio %','Add’l GWP (£m/yr)'], datasets:[
+      { label:'Baseline', data:[base.rate,base.avgLoss,base.gwp/1e6], backgroundColor:C.grey, barPercentage:.7 },
+      { label:'Simulated', data:[sim.rate,sim.avgLoss,sim.gwp/1e6], backgroundColor:C.accent, barPercentage:.7 } ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{boxWidth:12,usePointStyle:true}}},
+      scales:{ y:{beginAtZero:true,grid:{color:C.grid}}, x:{grid:{display:false}} }}});
+  // Day-5: keep the deeper-analysis visuals in sync with the sliders on every recompute
+  renderSensitivity();
+  renderDecomp();
+  return { th, dStp, lrDelta };
+}
+// Slider input → track the most-recently-adjusted parameter (drives the Sensitivity selector) then recompute
+Object.entries(S).forEach(([k,el])=> el.addEventListener('input', ()=>{
+  sensParam=k; const ss=document.getElementById('sensParamSel'); if(ss) ss.value=k; recompute(); }));
+document.getElementById('resetScenarioBtn').addEventListener('click',()=>{
+  S.prem.value=DEFAULTS.prem; S.lr.value=DEFAULTS.lr; S.nc.value=DEFAULTS.nc; S.rs.value=DEFAULTS.rs; recompute(); });
+
+/* ---- What-If: Sensitivity Curve (Day-5) ----
+   Power BI feasibility: added native Line Chart Sensitivity Curve (full parameter range sweep
+   with current-position and target reference lines). Sweeps the selected parameter across its
+   full slider range (holding the other three at their current values) and plots STP Rate % and
+   Loss Ratio % using the same stpUnder() mock recompute logic — so it extends the single-point
+   projection into a full curve. Current-setting (vertical) and 55% STP target (horizontal) are
+   plain 2-point line datasets, so everything is achievable on a native line chart. */
+function renderSensitivity(){
+  const el=document.getElementById('sensChart'); if(!el) return;
+  const p=WHATIF_PARAMS[sensParam];
+  const cur={ prem:+S.prem.value, lr:+S.lr.value, nc:+S.nc.value, rs:+S.rs.value };
+  const pol=visiblePolicies();
+  const STEPS=24, stpPts=[], lrPts=[];
+  for(let i=0;i<=STEPS;i++){
+    const x=p.min+(p.max-p.min)*i/STEPS;
+    const r=stpUnder({...cur,[sensParam]:x},pol);
+    stpPts.push({x, y:+r.rate.toFixed(1)});
+    lrPts.push({x, y:+r.avgLoss.toFixed(1)});
+  }
+  const curX=cur[sensParam];
+  CH.sens=new Chart(reset('sensChart'),{
+    type:'line',
+    data:{ datasets:[
+      { label:'STP Rate %',      data:stpPts, borderColor:C.accent, backgroundColor:C.accentSoft, tension:.3, pointRadius:0, borderWidth:2 },
+      { label:'Loss Ratio %',    data:lrPts,  borderColor:C.orange, backgroundColor:'rgba(232,98,44,.10)', tension:.3, pointRadius:0, borderWidth:2 },
+      { label:'Current Setting', data:[{x:curX,y:0},{x:curX,y:100}], borderColor:C.slate, borderDash:[5,4], pointRadius:0, borderWidth:1.5 },
+      { label:'Target (55% STP)',data:[{x:p.min,y:TARGET},{x:p.max,y:TARGET}], borderColor:C.warn, borderDash:[6,4], pointRadius:0, borderWidth:1.5 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, parsing:false, interaction:{mode:'nearest',intersect:false},
+      plugins:{ legend:{labels:{boxWidth:12,usePointStyle:true}},
+        tooltip:{ callbacks:{
+          title:items=> items.length? p.label+': '+p.fmt(items[0].parsed.x) : '',
+          label:c=> c.dataset.label+': '+c.parsed.y.toFixed(1)+'%' } } },
+      scales:{
+        x:{ type:'linear', min:p.min, max:p.max, title:{display:true,text:p.label}, grid:{display:false}, ticks:{maxTicksLimit:8, callback:v=>p.fmt(v)} },
+        y:{ min:0, max:100, title:{display:true,text:'%'}, grid:{color:C.grid}, ticks:{callback:v=>v+'%'} } }}});
+}
+document.getElementById('sensParamSel').addEventListener('change',e=>{ sensParam=e.target.value; renderSensitivity(); });
+
+/* ---- What-If: Decomposition Tree (Day-5) ----
+   Power BI feasibility: added native Decomposition Tree visual for exploring newly-qualifying
+   business composition. Root = submissions that qualify under the simulated thresholds but NOT
+   under the baseline (same "newly-STP" concept as the New STP Rate card), scaled to the period +
+   RLS submission volume. Each branch is user-expandable by a chosen dimension (up to 2 levels),
+   matching the native pick-a-field drill interaction. All counts recompute with sliders/period/RLS. */
+function newlyQualifyingPolicies(){
+  const pol=visiblePolicies();
+  const th={ prem:+S.prem.value, lr:+S.lr.value, nc:+S.nc.value, rs:+S.rs.value };
+  const q=(t,p)=> p.premium<=t.prem && p.priorLoss<=t.lr && p.natCatKm>=t.nc && p.riskScore<=t.rs;
+  return pol.filter(p=> q(th,p) && !q(DEFAULTS,p));
+}
+function groupByDim(list,dimKey){
+  const of=DECOMP_DIMS[dimKey].of, m={};
+  list.forEach(p=>{ const k=of(p); (m[k]=m[k]||[]).push(p); });
+  return Object.entries(m).map(([key,arr])=>({key,arr})).sort((a,b)=>b.arr.length-a.arr.length);
+}
+function dimSelect(level,current,node){
+  const opts=Object.entries(DECOMP_DIMS).map(([k,d])=>`<option value="${k}"${k===current?' selected':''}>${d.label}</option>`).join('');
+  const attrs= level===2 ? `data-level="2" data-node="${node}"` : 'data-level="1"';
+  return `<select class="dt-dim" ${attrs}>${opts}</select>`;
+}
+// Power BI feasibility: rebuilt as native left-to-right branching tree with elbow connectors and
+// per-node dimension pickers, matching Power BI's actual Decomposition Tree visual (not a
+// bar/progress-list layout). Nodes are placed in columns per drill level; a JS tidy-layout
+// assigns rows (parents centred on their children) and thin grey SVG elbows connect each child
+// back to its specific parent, so branches expand independently. Recomputes on slider/period/RLS.
+function renderDecomp(){
+  const el=document.getElementById('decompTree'); if(!el) return;
+  const newly=newlyQualifyingPolicies();
+  const total=newly.length;
+  const pf=PERIODS[state.period].subFactor;
+  const subs=Math.round(filteredSubmissions().length*SCALE*pf);
+  const scaleToSubs=subs/(visiblePolicies().length||1);
+  const scaled=n=>Math.round(n*scaleToSubs);
+  if(!total){
+    el.innerHTML=`<div class="dt-empty">No business newly qualifies under the current thresholds — they are at or tighter than the baseline. Loosen a rule above to explore newly-qualifying segments.</div>`;
+    return;
+  }
+  const pct=v=>Math.round(v/total*100);
+  // layout geometry (left→right columns, one per drill level)
+  const COL_W=212, BOX_W=170, BOX_H=50, ROW_H=80, PAD_L=12, PAD_T=42;
+  // level-1 groups + tidy row assignment (parents centred on their children)
+  let leafRow=0, maxLevel=1;
+  const l1=groupByDim(newly, decompState.dim1).map(g=>{
+    if(decompState.open[g.key]!=null){
+      maxLevel=2;
+      const dim2=decompState.open[g.key];
+      const kids=groupByDim(g.arr,dim2).map(c=>({key:c.key,count:c.arr.length,row:leafRow++}));
+      const row = kids.length ? (kids[0].row+kids[kids.length-1].row)/2 : leafRow++;
+      return {key:g.key,count:g.arr.length,row,expanded:true,dim2,kids};
+    }
+    return {key:g.key,count:g.arr.length,row:leafRow++,expanded:false,kids:[]};
+  });
+  const rows=Math.max(1,leafRow);
+  const rootRow=l1.reduce((s,n)=>s+n.row,0)/l1.length;
+  const W=PAD_L+(maxLevel+1)*COL_W, H=PAD_T+rows*ROW_H+14;
+  const cy=r=>PAD_T+r*ROW_H+ROW_H/2, cx=l=>PAD_L+l*COL_W;
+  const rootX=cx(0), l1X=cx(1), l2X=cx(2), rootCY=cy(rootRow);
+  // thin grey elbow connectors (right-angle, org-chart style)
+  const elbow=(x1,y1,x2,y2)=>{ const mx=x1+(x2-x1)/2; return `<path d="M${x1} ${y1} H${mx} V${y2} H${x2}" fill="none" stroke="#c7c7c7" stroke-width="1.5"/>`; };
+  let paths='';
+  l1.forEach(n=>{ const ncy=cy(n.row); paths+=elbow(rootX+BOX_W,rootCY,l1X,ncy);
+    if(n.expanded) n.kids.forEach(c=> paths+=elbow(l1X+BOX_W,ncy,l2X,cy(c.row))); });
+  // node boxes
+  let boxes='';
+  boxes+=`<div class="dt-fieldlbl" style="left:${rootX}px;top:${rootCY-BOX_H/2-18}px;width:${BOX_W}px;">Measure</div>`;
+  boxes+=`<div class="dt-box dt-box-root" style="left:${rootX}px;top:${rootCY-BOX_H/2}px;width:${BOX_W}px;">
+    <div class="dt-box-body"><div class="dt-box-name">Newly-STP Submissions</div><div class="dt-box-val">${scaled(total).toLocaleString()}</div></div></div>`;
+  // level-1 column header = breakdown-dimension picker
+  boxes+=`<div class="dt-colhdr" style="left:${l1X}px;top:10px;width:${BOX_W}px;">${dimSelect(1,decompState.dim1)}</div>`;
+  l1.forEach(n=>{ const ncy=cy(n.row);
+    boxes+=`<div class="dt-box" style="left:${l1X}px;top:${ncy-BOX_H/2}px;width:${BOX_W}px;">
+      <div class="dt-box-body"><div class="dt-box-name" title="${n.key}">${n.key}</div>
+        <div class="dt-box-val">${scaled(n.count).toLocaleString()} <span class="dt-box-pct">(${pct(n.count)}%)</span></div></div>
+      <button class="dt-plus" data-expand="${n.key}" title="${n.expanded?'Collapse this branch':'Expand this branch'}">${n.expanded?'−':'+'}</button></div>`;
+    if(n.expanded){
+      const firstTop=cy(n.kids[0].row)-BOX_H/2;
+      boxes+=`<div class="dt-colhdr" style="left:${l2X}px;top:${firstTop-26}px;width:${BOX_W}px;">${dimSelect(2,n.dim2,n.key)}</div>`;
+      n.kids.forEach(c=>{ const ccy=cy(c.row);
+        boxes+=`<div class="dt-box" style="left:${l2X}px;top:${ccy-BOX_H/2}px;width:${BOX_W}px;">
+          <div class="dt-box-body"><div class="dt-box-name" title="${c.key}">${c.key}</div>
+            <div class="dt-box-val">${scaled(c.count).toLocaleString()} <span class="dt-box-pct">(${pct(c.count)}%)</span></div></div></div>`; });
+    }
+  });
+  el.innerHTML=`<div class="dt-canvas" style="width:${W}px;height:${H}px;"><svg class="dt-conn" width="${W}" height="${H}">${paths}</svg>${boxes}</div>`;
+}
+// Decomposition Tree interaction (delegated on the persistent container)
+const decompEl=document.getElementById('decompTree');
+decompEl.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-expand]'); if(!b) return;
+  const k=b.dataset.expand;
+  if(decompState.open[k]!=null) delete decompState.open[k]; else decompState.open[k]=firstDimExcept(decompState.dim1);
+  renderDecomp();
+});
+decompEl.addEventListener('change',e=>{
+  const sel=e.target.closest('select[data-level]'); if(!sel) return;
+  if(sel.dataset.level==='1'){ decompState.dim1=sel.value; decompState.open={}; }
+  else { decompState.open[sel.dataset.node]=sel.value; }
+  renderDecomp();
+});
+
+/* ---- Distribution (channel-focused, RLS) ---- */
+const OVERRIDE_CEIL=8;   // governance ceiling referenced elsewhere in the dashboard
+const CH_SLA=2.0;        // Time-to-Decision SLA target (days)
+// colour by loss-ratio performance vs target — same 3-colour logic used across the tab
+function lrColor(lr){ return lr>LOSS_TARGET+2 ? C.neg : lr>LOSS_TARGET-3 ? C.warn : C.pos; }
+function channelStatus(lr){ return lr>LOSS_TARGET+2 ? {t:'Above target',col:C.neg} : lr>LOSS_TARGET-3 ? {t:'Near target',col:C.warn} : {t:'On target',col:C.pos}; }
+// Lead review: added Loss Ratio by Region bar chart as new dimension (mock geography)
+const REGIONS=[
+  { name:'Gauteng',       lossRatio:61 },
+  { name:'Western Cape',  lossRatio:55 },
+  { name:'KwaZulu-Natal', lossRatio:63 },
+  { name:'Eastern Cape',  lossRatio:57 },
+  { name:'Free State',    lossRatio:59 },
+];
+// period-scaled channel rows (rates/ratios period-invariant; £ GWP volume scales, YTD = baseline)
+function distChannels(){
+  const pMult=PERIODS[state.period].subFactor/PERIODS.YTD.subFactor;
+  return visibleChannels().map(c=>({...c, gwpP:+(c.gwp*pMult).toFixed(1)}));
+}
+// Power BI feasibility: replaced 5 cards with sortable Matrix/Table + Total row
+let channelSort={key:'gwp',dir:-1};
+function renderChannelTable(){
+  const rows=distChannels();
+  const body=document.getElementById('channelBody'); if(!body) return;
+  if(!rows.length){ body.innerHTML='<tr><td colspan="6" style="color:var(--txt-faint)">No channels in scope.</td></tr>'; return; }
+  const sorted=[...rows].sort((a,b)=>{ let x=a[channelSort.key],y=b[channelSort.key];
+    return typeof x==='string' ? channelSort.dir*x.localeCompare(y) : channelSort.dir*(x-y); });
+  const data=sorted.map(c=>{ const s=channelStatus(c.lossRatio);
+    const ovCol=c.override>=OVERRIDE_CEIL?C.neg:C.pos;   // green below 8% governance ceiling, red at/above
+    return `<tr><td>${c.name}</td><td class="num">£${c.gwpP}m</td><td class="num">${c.lossRatio}%</td>
+      <td class="num">${c.stp}%</td><td class="num"><b style="color:${ovCol}">${c.override}%</b></td>
+      <td><b style="color:${s.col}">${s.t}</b></td></tr>`; }).join('');
+  // Total row — GWP summed, other metrics GWP-weighted (matches Referral Drivers Total-row style)
+  const gSum=rows.reduce((s,c)=>s+c.gwp,0)||1;
+  const tG=rows.reduce((s,c)=>s+c.gwpP,0);
+  const wLR=rows.reduce((s,c)=>s+c.lossRatio*c.gwp,0)/gSum;
+  const wStp=rows.reduce((s,c)=>s+c.stp*c.gwp,0)/gSum;
+  const wOv=rows.reduce((s,c)=>s+c.override*c.gwp,0)/gSum;
+  body.innerHTML=data+`<tr class="total-row"><td>Total</td><td class="num">£${tG.toFixed(1)}m</td>
+    <td class="num">${wLR.toFixed(1)}%</td><td class="num">${wStp.toFixed(0)}%</td>
+    <td class="num">${wOv.toFixed(1)}%</td><td></td></tr>`;
+}
+function renderRegionChart(avg){
+  if(!document.getElementById('regionChart')) return;
+  CH.region=new Chart(reset('regionChart'),{
+    type:'bar',
+    data:{ labels:REGIONS.map(r=>r.name), datasets:[
+      { label:'Loss Ratio %', data:REGIONS.map(r=>r.lossRatio), backgroundColor:REGIONS.map(r=>r.lossRatio>avg?C.neg:C.pos), barThickness:18 },
+      { type:'line', label:`Book avg ${avg.toFixed(1)}%`, data:REGIONS.map(()=>+avg.toFixed(1)), borderColor:C.navy, borderDash:[6,4], pointRadius:0, borderWidth:1.5 } ]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{boxWidth:12,usePointStyle:true}},
+        tooltip:{callbacks:{label:c=> c.dataset.type==='line' ? 'Book average '+avg.toFixed(1)+'%' : c.raw+'%'}} },
+      scales:{ x:{beginAtZero:true, grid:{color:C.grid}, ticks:{callback:v=>v+'%'}}, y:{grid:{display:false}} }}});
+}
+function renderDist(){
+  const list=visibleChannels();
+  const note = state.role==='chief' ? 'Full book' : ROLES[state.role].label;
+  ['distScopeNoteL','distScopeNoteR','distScopeNoteC','distScopeNoteT'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent=note; });
+  const pMult=PERIODS[state.period].subFactor/PERIODS.YTD.subFactor;
+  const gwpP=c=>+(c.gwp*pMult).toFixed(1);
+  // Day-4: STP Portfolio Loss Ratio — GWP-weighted across channels in scope (ratio: period-invariant)
+  const gwpSum=list.reduce((s,c)=>s+c.gwp,0)||1;
+  const totalGwpP=list.reduce((s,c)=>s+c.gwp*pMult,0);   // = the Matrix Total-row GWP figure
+  const portLR=list.reduce((s,c)=>s+c.lossRatio*c.gwp,0)/gwpSum;
+  const lrEl=document.getElementById('stpPortLR');
+  if(lrEl){ lrEl.textContent=portLR.toFixed(1)+'%'; lrEl.style.color=portLR>LOSS_TARGET?'var(--neg)':'var(--pos)'; }
+  // Power BI feasibility: replaced 5 cards with sortable Matrix/Table + Total row
+  renderChannelTable();
+  // Lead review: Channel Concentration card now shows auditable GWP basis (uses the Total-row GWP as denominator)
+  const cv=document.getElementById('concVal'), cb=document.getElementById('concBasis'), cf=document.getElementById('concFlag');
+  if(cv&&cf){
+    if(list.length){
+      const top=[...list].sort((a,b)=>b.gwp-a.gwp)[0];
+      const share=top.gwp/gwpSum*100, over=share>=40;
+      cv.textContent=`Top Channel Share: ${share.toFixed(0)}% (${top.name})`;
+      if(cb) cb.textContent=`${top.name}: £${gwpP(top)}m of £${totalGwpP.toFixed(1)}m total GWP`;
+      cf.textContent = over ? 'Above the 40% concentration guideline — monitor reliance on this channel'
+                            : 'Within the 40% concentration guideline';
+      cf.style.color = over ? C.neg : C.pos;
+    } else { cv.textContent='—'; if(cb) cb.textContent=''; cf.textContent='No channels in scope.'; cf.style.color='var(--txt-faint)'; }
+  }
+  // Power BI feasibility: native Treemap (size = GWP, color = Loss Ratio risk)
+  const tree=list.map(c=>({...c, gwpP:gwpP(c)}));
+  CH.tree=new Chart(reset('treeChannel'),{
+    type:'treemap',
+    data:{ datasets:[{
+      tree, key:'gwpP', spacing:1, borderColor:'#fff', borderWidth:2,
+      backgroundColor:ctx=> ctx.type==='data' ? lrColor(ctx.raw._data.lossRatio) : 'transparent',
+      labels:{ display:true, color:'#fff', font:{size:11,weight:'700'}, align:'left', position:'top',
+        formatter:ctx=> ctx.raw&&ctx.raw._data ? [ctx.raw._data.name, '£'+ctx.raw._data.gwpP+'m'] : '' }
+    }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ displayColors:false, callbacks:{
+          title:items=> items.length&&items[0].raw._data ? items[0].raw._data.name : '',
+          label:it=>{ const c=it.raw._data; return ['GWP: £'+c.gwpP+'m','Loss Ratio: '+c.lossRatio+'%','STP: '+c.stp+'%']; } } } } }});
+  // Lead review: added Time-to-Decision by Channel bar chart with SLA reference line (vertical @ 2.0d)
+  CH.ttdCh=new Chart(reset('ttdChannel'),{
+    type:'bar',
+    data:{ labels:list.map(c=>c.name), datasets:[
+      { label:'Avg Time-to-Decision (days)', data:list.map(c=>c.ttd), backgroundColor:list.map(c=>c.ttd<=CH_SLA?C.pos:C.neg), barThickness:18 },
+      { type:'line', label:'SLA 2.0d', data:list.map(()=>CH_SLA), borderColor:C.navy, borderDash:[6,4], pointRadius:0, borderWidth:1.5 } ]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{boxWidth:12,usePointStyle:true}},
+        tooltip:{callbacks:{label:c=> c.dataset.type==='line' ? 'SLA target 2.0 days' : c.raw+' days'}} },
+      scales:{ x:{beginAtZero:true, title:{display:true,text:'Days'}, grid:{color:C.grid}, ticks:{callback:v=>v+'d'}}, y:{grid:{display:false}} }}});
+  // Lead review: Loss Ratio by Region — full-book analytics; hidden for scoped roles (no channel→region map).
+  // Reference line = portfolio Loss Ratio (same figure as STP Portfolio Loss Ratio above).
+  const rc=document.getElementById('regionCard');
+  if(state.role==='chief'){ if(rc) rc.style.display=''; renderRegionChart(portLR); }
+  else { if(rc) rc.style.display='none'; if(CH.region){ CH.region.destroy(); CH.region=null; } }
+}
+// sortable Matrix/Table — click any header to toggle asc/desc (native Power BI table behaviour)
+document.querySelectorAll('#channelTable thead th[data-sort]').forEach(th=>{
+  th.addEventListener('click',()=>{ const k=th.dataset.sort;
+    if(channelSort.key===k) channelSort.dir*=-1; else { channelSort.key=k; channelSort.dir=(k==='name')?1:-1; }
+    renderChannelTable(); });
+});
+
+/* ---- Trend page (multi-metric toggle, RLS) ---- */
+const trendSeries={
+  ref:[24,23,23,22,21,21,20,20,19,19,18,18],
+  dec:[16,16,15,15,15,14,14,14,13,13,13,12],
+  ttd:[4.8,4.6,4.5,4.2,4.0,3.7,3.6,3.3,3.1,2.9,2.7,2.5],
+  lossTrend:[63,62,62,61,61,60,60,59,59,60,59,59],
+};
+const trendCaptions={
+  stp:'STP rate by month vs the 55% target line.',
+  vol:'Submission volume by month (scaled to current RLS scope).',
+  ref:'Manual referral rate by month — lower is better.',
+  dec:'Exception / decline rate by month.',
+  ttd:'Average time-to-decision by month vs the 3-day SLA line.',
+  prod:'STP rate by product line across quarters (RLS-filtered).',
+  tva:'Target vs actual — STP rate and loss ratio against their targets.',
+  uw:'STP rate by underwriting team (mock underwriter-level data — pending source confirmation).'
+};
+function volTrend(){
+  const ratio=filteredSubmissions().length/(SUBMISSIONS.length||1);
+  const base=[720,760,800,830,880,910,940,980,1010,1060,1100,1150];
+  return base.map(v=>Math.round(v*ratio));
+}
+function renderTrend(){
+  const m=state.trendMetric;
+  document.getElementById('trendCaption').textContent=trendCaptions[m];
+  const titles={stp:'STP Rate Trend',vol:'Submission Volume Trend',ref:'Referral Rate Trend',dec:'Exception / Decline Rate Trend',ttd:'Time-to-Decision Trend',prod:'Product Line Performance',tva:'Target vs Actual Performance',uw:'Underwriter Performance Comparison'};
+  document.getElementById('trendTitle').textContent=titles[m];
+  let cfg;
+  const lineOpts={ responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{boxWidth:12,usePointStyle:true}}},
+    scales:{ y:{grid:{color:C.grid}}, x:{grid:{display:false}} } };
+  if(m==='stp'){
+    cfg={ type:'line', data:{labels:MONTHS,datasets:[
+      {label:'STP Rate %',data:stpTrend,borderColor:C.accent,backgroundColor:C.accentSoft,fill:true,tension:.35,pointRadius:3,borderWidth:2},
+      {label:'Target 55%',data:MONTHS.map(()=>TARGET),borderColor:C.warn,borderDash:[6,4],pointRadius:0,borderWidth:1.5}]}, options:lineOpts };
+  } else if(m==='vol'){
+    cfg={ type:'bar', data:{labels:MONTHS,datasets:[{label:'Submissions',data:volTrend(),backgroundColor:C.accent,borderRadius:5}]},
+      options:{...lineOpts, plugins:{legend:{display:false}}} };
+  } else if(m==='ref'){
+    cfg={ type:'line', data:{labels:MONTHS,datasets:[{label:'Referral Rate %',data:trendSeries.ref,borderColor:C.warn,backgroundColor:'rgba(245,158,11,.12)',fill:true,tension:.35,pointRadius:3,borderWidth:2}]}, options:lineOpts };
+  } else if(m==='dec'){
+    cfg={ type:'line', data:{labels:MONTHS,datasets:[{label:'Decline Rate %',data:trendSeries.dec,borderColor:C.neg,backgroundColor:'rgba(220,38,38,.10)',fill:true,tension:.35,pointRadius:3,borderWidth:2}]}, options:lineOpts };
+  } else if(m==='ttd'){
+    cfg={ type:'line', data:{labels:MONTHS,datasets:[
+      {label:'Days',data:trendSeries.ttd,borderColor:C.indigo,backgroundColor:'rgba(99,102,241,.12)',fill:true,tension:.35,pointRadius:3,borderWidth:2},
+      {label:'SLA 3d',data:MONTHS.map(()=>SLA_TTD),borderColor:C.neg,borderDash:[6,4],pointRadius:0,borderWidth:1.5}]},
+      options:{...lineOpts, scales:{y:{grid:{color:C.grid},ticks:{callback:v=>v+'d'}},x:{grid:{display:false}}}} };
+  } else if(m==='prod'){
+    const list=visibleProducts(); const qs=['Q1','Q2','Q3','Q4'];
+    cfg={ type:'bar', data:{ labels:list.map(p=>p.code), datasets:qs.map((q,i)=>({
+      label:q, data:list.map(p=>Math.max(20,Math.round(p.stp-9+i*3))), backgroundColor:SEQ[i], borderRadius:4 }))},
+      options:{...lineOpts, scales:{y:{min:0,max:80,grid:{color:C.grid},ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}} };
+  } else if(m==='tva'){
+    cfg={ type:'line', data:{labels:MONTHS,datasets:[
+      {label:'STP Actual',data:stpTrend,borderColor:C.accent,tension:.35,pointRadius:2,borderWidth:2},
+      {label:'STP Target',data:MONTHS.map(()=>TARGET),borderColor:C.accent,borderDash:[6,4],pointRadius:0,borderWidth:1.5},
+      {label:'Loss Actual',data:trendSeries.lossTrend,borderColor:C.warn,tension:.35,pointRadius:2,borderWidth:2},
+      {label:'Loss Target',data:MONTHS.map(()=>LOSS_TARGET),borderColor:C.warn,borderDash:[6,4],pointRadius:0,borderWidth:1.5}]},
+      options:{...lineOpts, scales:{y:{min:20,max:80,grid:{color:C.grid},ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}} };
+  } else if(m==='uw'){
+    // Mock underwriter-level data (meaningful) — flagged as pending source confirmation
+    const teams=['Team Alpha','Team Beta','Team Gamma','Team Delta'];
+    let vals=[57,49,62,44];
+    if(state.role==='uwmCP'){ teams.length=2; vals=[58,54]; } // scoped
+    else if(state.role!=='chief'){ teams.length=3; vals=[55,48,60]; }
+    cfg={ type:'bar', data:{labels:teams,datasets:[{label:'STP %',data:vals,backgroundColor:teams.map((_,i)=>SEQ[i%SEQ.length]),borderRadius:5}]},
+      options:{...lineOpts, plugins:{legend:{display:false}}, scales:{y:{min:0,max:80,grid:{color:C.grid},ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}} };
+  }
+  CH.trend=new Chart(reset('trendMain'), cfg);
+}
+document.getElementById('trendToggle').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#trendToggle button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); state.trendMetric=b.dataset.m; renderTrend();
+});
+
+/* ---- Insights key cards (scope-aware, mock) ---- */
+function renderInsights(){
+  const list=visibleProducts();
+  const arr=filteredSubmissions();
+  const topProd=[...list].sort((a,b)=>b.subs-a.subs)[0];
+  const loss=arr.length? arr.reduce((s,x)=>s+x.lossRatio,0)/arr.length : 0;
+  const cards=[
+    { cls:'pos',  tag:'Growth',   txt:`STP Rate has grown <b>6.2pp YoY</b>${topProd?`, driven mainly by <b>${topProd.name}</b> submissions`:''}.` },
+    { cls:'',     tag:'Risk',     txt:`Loss Ratio remains within tolerance (<b>${loss.toFixed(1)}% vs 60% threshold</b>) despite STP-rate growth.` },
+    { cls:'warn', tag:'Attention',txt:`Referral share for the <b>NatCat Exclusion Radius</b> rule rose <b>+3pp</b> this quarter — review threshold.` },
+    { cls:'',     tag:'Efficiency',txt:`Average Time-to-Decision improved to <b>2.5 days</b>, now below the 3-day SLA.` },
+    // Day-4: ideal-layout secondary metrics surfaced as insight cards
+    { cls:'',     tag:'Governance', txt:`Underwriter Override Rate holding at <b>6.4%</b> of STP-eligible decisions — within the 8% governance ceiling.` },
+    { cls:'pos',  tag:'Automation', txt:`Automation via STP saved an estimated <b>£1.28m</b> in manual underwriting effort YTD (mock estimate).` },
+  ];
+  document.getElementById('insightGrid').innerHTML=cards.map(c=>`
+    <div class="insight ${c.cls}"><span class="i-tag">${c.tag}</span><p>${c.txt}</p></div>`).join('');
+}
+
+/* ================================================================
+   Lead review: remove open items — tracker data & init removed.
+   ================================================================ */
+
+/* ================================================================
+   Info modal — open/close wiring
+   ================================================================ */
+const overlay=document.getElementById('overlay');
+function closeAll(){ document.getElementById('infoModal').classList.remove('show'); overlay.classList.remove('show'); }
+overlay.addEventListener('click',closeAll);
+document.getElementById('infoBtn').addEventListener('click',()=>{
+  document.getElementById('lastRefresh').textContent=new Date().toLocaleString('en-GB');
+  document.getElementById('infoModal').classList.add('show'); overlay.classList.add('show'); });
+document.getElementById('infoClose').addEventListener('click',closeAll);
+
+/* ================================================================
+   Lead review: full filter pane (Period, Product, LOB, Premium Range,
+   Decision Status, Company, High Value) matching Claims Dashboard pattern.
+   ================================================================ */
+const filterPanel=document.getElementById('filterPanel');
+document.getElementById('filterBtn').addEventListener('click',()=>filterPanel.classList.toggle('show'));
+document.getElementById('fpClose').addEventListener('click',()=>filterPanel.classList.remove('show'));
+
+// Option lists (Product / LOB / Company) rebuilt for the current RLS role
+function rebuildFilterOptions(){
+  const ents=entitledProducts();
+  const fp=document.getElementById('fProduct');
+  fp.innerHTML='<option value="all">All</option>'+ents.map(p=>`<option value="${p.name}">${p.name}</option>`).join('');
+  fp.value = ents.some(p=>p.name===state.product) ? state.product : 'all';
+  const lobs=[...new Set(ents.map(p=>p.lob))];
+  const fl=document.getElementById('fLob');
+  fl.innerHTML='<option value="all">All</option>'+lobs.map(l=>`<option value="${l}">${l}</option>`).join('');
+  fl.value = lobs.includes(state.lob) ? state.lob : 'all';
+  const r=ROLES[state.role];
+  const chs=CHANNELS.filter(c=> !r.channelRegion || c.region===r.channelRegion);
+  const fc=document.getElementById('fCompany');
+  fc.innerHTML='<option value="all">All</option>'+chs.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  fc.value = chs.some(c=>c.name===state.company) ? state.company : 'all';
+}
+
+// Field wiring — each updates state + re-renders live
+document.getElementById('fProduct').addEventListener('change',e=>{ state.product=e.target.value; renderAll(); });
+document.getElementById('fLob').addEventListener('change',e=>{ state.lob=e.target.value; renderAll(); });
+document.getElementById('fDecision').addEventListener('change',e=>{ state.decision=e.target.value; renderAll(); });
+document.getElementById('fCompany').addEventListener('change',e=>{ state.company=e.target.value; renderAll(); });
+document.getElementById('fPeriod').addEventListener('change',e=>{ if(e.target.name==='per') setPeriod(e.target.value); });
+
+/* ================================================================
+   Lead review: active filters strip (replaces period label)
+   Read-only "selected values" row, rebuilt on any Filter Pane change.
+   ================================================================ */
+function renderActiveFilters(){
+  const box=document.getElementById('activeFilters'); if(!box) return;
+  // Period (custom shows the date range)
+  let periodTxt=PERIODS[state.period].label;
+  if(state.period==='CUSTOM'){
+    periodTxt=(document.getElementById('dtFrom').value||'—')+' → '+(document.getElementById('dtTo').value||'—');
+  }
+  // Lead review: removed Premium Range, High Value and Role pills from the strip
+  const pills=[
+    ['Period',periodTxt],
+    ['Product', state.product==='all'?'All':state.product],
+    ['LOB', state.lob==='all'?'All':state.lob],
+    ['Decision Status', state.decision==='all'?'All':state.decision],
+    ['Company', state.company==='all'?'All':state.company],
+  ];
+  box.innerHTML='<span class="af-label">Active filters</span>'+
+    pills.map(([k,v])=>`<span class="af-pill"><span class="af-key">${k}</span> ${v}</span>`).join('');
+}
+
+/* Lead review: period lives in the filter pane as a radio list */
+function setPeriod(p){
+  state.period=p;
+  const radio=document.querySelector(`#fPeriod input[value="${p}"]`); if(radio) radio.checked=true;
+  document.getElementById('fpCustom').classList.toggle('show',p==='CUSTOM');
+  renderKpis();
+  // Day-5: period also scales the funnel volumes, the Smart Narrative figures, the
+  // Decomposition Tree counts and the Risk Leakage tab — re-render them so all period-scaled
+  // counts stay consistent (Risk Leakage no longer hardcoded to Today).
+  renderStpFunnel();
+  renderSmartNarrative();
+  renderDecomp();
+  renderLeakage();
+  renderDist();          // Day-5: Distribution GWP volume is period-scaled (rates stay period-invariant)
+  renderActiveFilters();
+}
+document.getElementById('dtFrom').addEventListener('change',()=>{ renderKpis(); renderActiveFilters(); });
+document.getElementById('dtTo').addEventListener('change',()=>{ renderKpis(); renderActiveFilters(); });
+
+/* ================================================================
+   RLS role switch — Lead review: updates EVERY tab
+   ================================================================ */
+document.getElementById('roleSel').addEventListener('change',e=>{
+  state.role=e.target.value;
+  // role change resets all filter-pane fields to the new role's entitled set
+  state.product='all'; state.lob='all'; state.company='all'; state.decision='all';
+  document.getElementById('fDecision').value='all';
+  rebuildFilterOptions();
+  renderAll();
+});
+
+/* ================================================================
+   Tab switching
+   ================================================================ */
+/* Lead review: sidebar navigation — nav links switch tabs + update the page title */
+document.getElementById('navMenu').addEventListener('click',e=>{
+  const btn=e.target.closest('.navlink'); if(!btn) return;
+  document.querySelectorAll('.navlink').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  document.getElementById('pageTitle').textContent=btn.dataset.title;
+});
+
+/* Day-4 (Part 3b): "View full trend →" link in the STP KPI card → Trends tab, STP Rate view.
+   Delegated on the KPI row since the link is rebuilt on every render. */
+document.getElementById('kpiRow').addEventListener('click',e=>{
+  if(!e.target.closest('.spark-link')) return;
+  const nav=document.querySelector('.navlink[data-tab="trend"]'); if(nav) nav.click();
+  const stpBtn=document.querySelector('#trendToggle button[data-m="stp"]'); if(stpBtn) stpBtn.click();
+});
+
+/* ================================================================
+   Master render — called on any RLS / filter / period change
+   ================================================================ */
+function renderAll(){
+  renderActiveFilters(); // Lead review: active filters strip stays in sync
+  renderKpis();          // Day-4 (Part 3b): builds the STP sparkline inside the KPI card
+  renderStpFunnel();     // Day-4: Overview funnel (single source of the decision split)
+  renderSmartNarrative();// Day-5: Overview Smart Narrative AI visual (beside the funnel)
+  renderProductBar();
+  renderAvE();
+  renderDrivers();
+  renderException();     // Day-4: Referral Drivers exception reasons
+  renderWorkbench();     // Day-4: Referral Workbench queue
+  renderLeakage();       // Day-4: Risk Leakage governance view
+  recompute();
+  renderDist();
+  renderTrend();
+  renderInsights();
+}
+
+/* INIT */
+rebuildFilterOptions();
+setPeriod('YTD');
+renderAll();
+</script>
+</body>
+</html>

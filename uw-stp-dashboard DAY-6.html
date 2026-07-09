@@ -217,7 +217,7 @@ a{ color:var(--accent); }
 @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
 
 .grid{ display:grid; gap:16px; }
-.g-2{ grid-template-columns:1fr 1fr; }
+.g-2{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
 .g-3{ grid-template-columns:2fr 1fr; }
 
 .card{

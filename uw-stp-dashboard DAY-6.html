@@ -89,7 +89,8 @@
   --accent:#1a2456;        /* navy primary (headings, active text, chart series) */
   --accent-strong:#1a2456;
   --accent-soft:rgba(26,36,86,0.08);
-  --warn:#f59e0b;          /* amber */
+  --warn:#f59e0b;          /* amber (fills / graphics) */
+  --warn-text:#b45309;     /* darker amber — WCAG-safe for amber TEXT on light surfaces */
   --pos:#16a34a;           /* green delta */
   --neg:#dc2626;           /* red delta */
   --shadow:0 6px 18px rgba(26,26,46,0.06);
@@ -261,47 +262,32 @@ a{ color:var(--accent); }
 .ave .ave-lbl{ font-size:11px; color:var(--txt-dim); font-weight:600; }
 .ave .ave-ratio{ font-size:22px; font-weight:300; margin:6px 0 2px; }
 .ave .ave-detail{ font-size:10.5px; color:var(--txt-faint); }
-/* Power BI feasibility: bullet-chart style A/E card — flat Actual bar, vertical
-   Expected target line, status shown as plain colored text (no pill badge, no gradient). */
-.ave{ cursor:help; }                       /* signals the hover tooltip on A/E cards */
-.ave-bar{ position:relative; height:10px; background:var(--panel); border:1px solid var(--border);
-  border-radius:2px; margin:9px 2px 8px; }               /* flat qualitative band (single colour) */
-.ave-bar-fill{ position:absolute; left:0; top:0; bottom:0; border-radius:2px; transition:width .5s ease; }
-.ave.good .ave-bar-fill{ background:var(--pos); }
-.ave.warn .ave-bar-fill{ background:var(--warn); }
-.ave.bad  .ave-bar-fill{ background:var(--neg); }
-/* Power BI feasibility: target marker is a plain vertical line (removed the CSS marker pin) */
-.ave-tick{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--txt); }
-/* Power BI feasibility: status = conditional-formatting text colour only (no pill container) */
-.ave-status{ font-size:12px; font-weight:700; margin-top:6px; }
-.ave.good .ave-status{ color:var(--pos); }
-.ave.warn .ave-status{ color:#b45309; }
-.ave.bad  .ave-status{ color:var(--neg); }
-
-/* Power BI feasibility: single multi-category Bullet Chart (OKViz pattern) — product
-   rows stacked in ONE bordered visual (the card), separated by thin dividers, each with a
-   thin conditional-formatting left accent. Replaces the 6 separate .ave cards on Overview. */
+/* Actual vs Expected — OKViz / Stephen-Few bullet chart. One reusable BulletRow per product line,
+   layered on a shared hidden 0–100% scale: qualitative range bands (neutral grey, 3 shades) behind
+   a thin conditional-coloured Actual bar, with a tall dark Target tick. No visible axis. */
 .bullet-chart{ display:flex; flex-direction:column; }
-.bullet-row{ display:grid; grid-template-columns:160px 1fr; align-items:center; gap:16px;
-  padding:11px 6px 11px 12px; border-left:3px solid var(--txt-faint);
-  border-bottom:1px solid var(--border-soft); cursor:help; }
-.bullet-row:last-child{ border-bottom:none; }
-.bullet-row.good{ border-left-color:var(--pos); }
-.bullet-row.warn{ border-left-color:var(--warn); }
-.bullet-row.bad{  border-left-color:var(--neg); }
-.bullet-row .br-label{ font-size:12.5px; font-weight:600; color:var(--txt); }
-.bullet-row .br-body{ min-width:0; }
-.bullet-row .ave-bar{ margin:0; }                    /* flat qualitative band, no card margin */
-.bullet-row .br-meta{ display:flex; justify-content:space-between; align-items:baseline;
-  gap:14px; flex-wrap:wrap; margin-top:6px; }
-.bullet-row .br-meta .ave-detail{ font-size:11px; color:var(--txt-dim); }
-.bullet-row .br-meta .ave-status{ margin-top:0; }
-.bullet-row.good .ave-bar-fill{ background:var(--pos); }
-.bullet-row.warn .ave-bar-fill{ background:var(--warn); }
-.bullet-row.bad  .ave-bar-fill{ background:var(--neg); }
-.bullet-row.good .ave-status{ color:var(--pos); }
-.bullet-row.warn .ave-status{ color:#b45309; }
-.bullet-row.bad  .ave-status{ color:var(--neg); }
+.blt-row{ display:grid; grid-template-columns:150px 1fr; align-items:center; gap:16px;
+  padding:12px 6px; border-bottom:1px solid var(--border-soft); cursor:help; }
+.blt-row:last-child{ border-bottom:none; }
+.blt-label{ font-size:12.5px; font-weight:700; color:var(--navy); }
+.blt-body{ min-width:0; }
+.blt-sub{ font-size:11px; color:var(--txt-dim); margin-bottom:6px; }   /* Actual X% · Expected Y% */
+/* layered track — no border, no axis line */
+.blt-track{ position:relative; height:18px; }
+.blt-band{ position:absolute; top:0; bottom:0; }
+.blt-band.b1{ background:rgba(91,100,120,0.08); }   /* good range — lightest neutral */
+.blt-band.b2{ background:rgba(91,100,120,0.16); }   /* on-plan range — mid */
+.blt-band.b3{ background:rgba(91,100,120,0.26); }   /* poor range — darkest */
+.blt-fill{ position:absolute; left:0; top:50%; transform:translateY(-50%); height:6px; border-radius:2px; transition:width .5s ease; }
+.blt-tick{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--txt); border-radius:1px; }  /* Target marker */
+.blt-status{ font-size:12px; font-weight:700; margin-top:8px; }
+/* role-based conditional formatting — Actual bar + status text (success / warning / danger) */
+.blt-row.good .blt-fill{ background:var(--pos); }
+.blt-row.warn .blt-fill{ background:var(--warn); }
+.blt-row.bad  .blt-fill{ background:var(--neg); }
+.blt-row.good .blt-status{ color:var(--pos); }
+.blt-row.warn .blt-status{ color:var(--warn-text); }
+.blt-row.bad  .blt-status{ color:var(--neg); }
 
 /* Power BI feasibility: native Smart Narrative AI visual — a text-only auto-generated summary.
    Plain narrative sentences with data-bound numeric values highlighted in bold navy (the way
@@ -339,17 +325,26 @@ tbody tr.total-row{ font-weight:700; background:var(--panel-2); border-top:2px s
 tbody tr.total-row td{ border-bottom:none; }
 tbody tr.total-row:hover{ background:var(--panel-2); }
 
-/* Sliders */
-.sliders{ display:grid; grid-template-columns:1fr; gap:20px 26px; }
-.slider-block .sb-top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
-.slider-block .sb-lbl{ font-weight:600; font-size:13px; }
-.slider-block .sb-val{ font-weight:600; font-size:14px; color:var(--accent-strong); }
-.slider-block .sb-help{ font-size:10.5px; color:var(--txt-dim); margin-top:6px; line-height:1.35; }
-.slider-block .sb-range{ font-size:10px; color:var(--txt-faint); display:flex; justify-content:space-between; margin-top:4px; }
-input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px; background:var(--panel-2); outline:none; }
-input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:18px; height:18px; border-radius:50%;
-  background:var(--accent); cursor:pointer; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.2); }
-input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; border:2px solid #fff; background:var(--accent); cursor:pointer; }
+/* Rule Thresholds — Power BI-style range slicer (one reusable style for all 3 controls).
+   Track colours are theme tokens: dark-grey filled portion, soft-peach unfilled remainder. */
+.sliders{ display:flex; flex-direction:column; gap:24px; --rng-fill:var(--txt-dim); --rng-empty:var(--orange-soft); }
+.slider-block .sb-lbl{ display:block; font-weight:700; font-size:13px; color:var(--navy); margin-bottom:8px; }
+.slider-block .sb-inputs{ display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.slider-block .sb-box{ min-width:58px; text-align:center; font-size:12px; font-weight:600;
+  border:1px solid var(--border); border-radius:4px; padding:5px 8px; line-height:1.2; }
+.slider-block .sb-min{ color:var(--txt-faint); background:var(--panel-2); }
+.slider-block .sb-cur{ color:var(--txt); background:var(--panel); font-family:inherit; outline:none; }
+.slider-block .sb-cur:focus{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+.slider-block .sb-help{ font-size:10.5px; color:var(--txt-dim); margin-top:10px; line-height:1.35; }
+/* thin flat two-tone track + flat circular thumb (no shadow) */
+input[type=range].rng{ -webkit-appearance:none; appearance:none; width:100%; height:20px; background:transparent; outline:none; cursor:pointer; }
+input[type=range].rng::-webkit-slider-runnable-track{ height:3px; border-radius:999px;
+  background:linear-gradient(to right, var(--rng-fill) var(--pct,50%), var(--rng-empty) var(--pct,50%)); }
+input[type=range].rng::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:20px; height:20px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--txt-dim); box-shadow:none; margin-top:-8.5px; }
+input[type=range].rng::-moz-range-track{ height:3px; border-radius:999px;
+  background:linear-gradient(to right, var(--rng-fill) var(--pct,50%), var(--rng-empty) var(--pct,50%)); }
+input[type=range].rng::-moz-range-thumb{ width:20px; height:20px; border-radius:50%; background:var(--panel); border:2px solid var(--txt-dim); box-shadow:none; }
 
 .result-strip{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:6px; }
 .result{ background:var(--panel-2); border:1px solid var(--border-soft); border-radius:12px 0 12px 0; padding:14px; }
@@ -470,7 +465,7 @@ tr.leak-drill:hover{ background:var(--orange-soft); }
   .sliders{ grid-template-columns:1fr; }
   .kpi-row{ grid-template-columns:repeat(2,1fr); }
   .result-strip{ grid-template-columns:1fr; }
-  .bullet-row{ grid-template-columns:110px 1fr; gap:12px; }
+  .blt-row{ grid-template-columns:110px 1fr; gap:12px; }
 }
 </style>
 </head>
@@ -595,8 +590,17 @@ tr.leak-drill:hover{ background:var(--orange-soft); }
 
     <div class="grid g-2">
       <div class="card">
-        <div class="card-h"><div><h3>STP by Product &amp; LOB</h3></div><span class="sub">Green ≥ 55% · Amber below</span></div>
-        <div class="chart-wrap tall" style="height:200px;"><canvas id="barProduct"></canvas></div>
+        <div class="card-h">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <h3 id="stpByTitle">STP by Product</h3>
+            <select id="stpViewBy" class="wi-select" aria-label="View by">
+              <option value="product">Product</option>
+              <option value="lob">LOB</option>
+            </select>
+          </div>
+          <span class="sub">Green ≥ 55% · Amber below</span>
+        </div>
+        <div class="chart-wrap tall" style="height:320px;"><canvas id="barProduct"></canvas></div>
       </div>
       <div class="card">
         <div class="card-h"><div><h3>Actual vs Expected — Loss Ratio</h3></div><span class="sub">By product line · hover a row for detail</span></div>
@@ -713,26 +717,8 @@ tr.leak-drill:hover{ background:var(--orange-soft); }
     <div class="grid g-2">
       <div class="card">
         <div class="card-h"><div><h3>Rule Thresholds</h3></div><span class="sub">Live recompute</span></div>
-        <div class="sliders">
-          <div class="slider-block">
-            <div class="sb-top"><span class="sb-lbl">STP Premium Limit</span><span class="sb-val" id="v-prem">£75k</span></div>
-            <input type="range" id="s-prem" min="25000" max="150000" step="2500" value="75000">
-            <div class="sb-range"><span>£25k</span><span>£150k</span></div>
-            <div class="sb-help">↑ limit → STP Rate ↑, GWP ↑, Loss Ratio may ↑ (larger risks pass).</div>
-          </div>
-          <div class="slider-block">
-            <div class="sb-top"><span class="sb-lbl">Max Prior Loss Ratio</span><span class="sb-val" id="v-lr">70%</span></div>
-            <input type="range" id="s-lr" min="40" max="100" step="1" value="70">
-            <div class="sb-range"><span>40%</span><span>100%</span></div>
-            <div class="sb-help">↑ ceiling → STP Rate ↑, but Loss Ratio ↑ (worse-history risks pass).</div>
-          </div>
-          <div class="slider-block">
-            <div class="sb-top"><span class="sb-lbl">Risk-Score Ceiling</span><span class="sb-val" id="v-rs">65</span></div>
-            <input type="range" id="s-rs" min="30" max="100" step="1" value="65">
-            <div class="sb-range"><span>30</span><span>100</span></div>
-            <div class="sb-help">↑ ceiling → STP Rate ↑, modest Loss Ratio ↑ (marginal risks pass).</div>
-          </div>
-        </div>
+        <!-- Power BI-style range slicers built from WHATIF_PARAMS (one reusable component per threshold) -->
+        <div class="sliders" id="ruleSliders"></div>
         <!-- Lead review: removed Save Scenario button -->
         <div style="display:flex; gap:10px; margin-top:20px;">
           <button class="btn" id="resetScenarioBtn">Reset to baseline</button>
@@ -984,7 +970,8 @@ const ROLES = {
 const state = {
   role:'chief', period:'YTD',
   product:'all', lob:'all', decision:'all', company:'all',
-  trendMetric:'stp'
+  trendMetric:'stp',
+  stpViewBy:'product'          // "STP by Product & LOB" chart — toggles Product | LOB
 };
 
 // Lead review: added Today/WTD period options — chronological shortest→longest.
@@ -1132,58 +1119,92 @@ function reset(id){ const ex=Chart.getChart(id); if(ex) ex.destroy(); return doc
    KPI-card sparkline now cover that ground. The stpTrend data is retained for both. */
 const stpTrend=[29,31,33,34,37,39,41,43,46,48,50,52];
 function renderProductBar(){
-  // STP rate per product, from the filtered submission set
+  // STP rate by Product OR by LOB — single view driven by state.stpViewBy (dropdown in the header).
   const arr=filteredSubmissions(); const list=visibleProducts();
-  const data=list.map(p=>{ const g=arr.filter(x=>x.product===p.name); return g.length? Math.round(g.filter(x=>x.stp).length/g.length*100):0; });
+  const stpPct=g=> g.length? Math.round(g.filter(x=>x.stp).length/g.length*100):0;
+  const byLob = state.stpViewBy==='lob';
+  let labels, data;
+  if(byLob){
+    const lobs=[...new Set(list.map(p=>p.lob))];                     // LOBs within the current scope
+    labels=lobs.map(l=>l+' (LOB)');
+    data=lobs.map(lb=> stpPct(arr.filter(x=>x.lob===lb)));
+  } else {
+    labels=list.map(p=>p.name);
+    data=list.map(p=> stpPct(arr.filter(x=>x.product===p.name)));
+  }
+  // dynamic title reflects the current view
+  const title=document.getElementById('stpByTitle'); if(title) title.textContent = byLob? 'STP by LOB' : 'STP by Product';
+  const backgroundColor=data.map(v=> v>=TARGET?C.pos:C.warn);        // green ≥ 55%, amber below — unchanged
   CH.prod=new Chart(reset('barProduct'),{
     type:'bar',
-    data:{ labels:list.map(p=>p.name), datasets:[{ label:'STP %', data,
-      backgroundColor:data.map(v=>v>=TARGET?C.pos:C.warn), borderRadius:6, categoryPercentage:0.8, barPercentage:0.62, maxBarThickness:22 }]},
-    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    data:{ labels, datasets:[{ label:'STP %', data, backgroundColor, borderRadius:6, categoryPercentage:0.8, barPercentage:0.62, maxBarThickness:20 }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:c=> c.parsed.x==null?'':'STP '+c.parsed.x+'%' } } },
       scales:{ x:{min:0,max:80,grid:{color:C.grid},ticks:{callback:v=>v+'%'}}, y:{grid:{display:false}} }}});
+}
+// "View by" toggle — one state var drives the title + which group renders; re-renders in place (no reload)
+document.getElementById('stpViewBy').addEventListener('change',e=>{ state.stpViewBy=e.target.value; renderProductBar(); });
+// Reusable OKViz/Stephen-Few BulletChart row. Props: label, actual, target, cls, statusText, tip,
+// and optional rangeThresholds {good, poor}. Qualitative bands auto-recalculate from the target
+// (good ≤ target-5, on-plan target±5, poor ≥ target+5). All rows share a fixed 0–100% scale.
+//
+// Power BI feasibility — build natively (Option B, chosen), NOT per-product measures. One category
+// axis = Product; every visual element is driven by a single context-aware measure that Power BI
+// re-evaluates per row:
+//   • Actual bar   → native horizontal bar; Data colors → Format style "Field value" → [Bar Color]
+//                    Bar Color = SWITCH(TRUE(), [A/E]>1.05,"#DC2626", [A/E]>0.98,"#F59E0B","#16A34A")
+//   • Qualitative bands → background stacked segments sized by measures [Range Lower]=[Expected]-5,
+//                    [Range Upper]=[Expected]+5 (3 neutral-grey shades, recalc per row from Target).
+//   • Target tick  → analytics constant line at [Expected] (or a thin overlaid stacked segment).
+//   • Status text  → [Status Text] measure; font colour via conditional formatting "Field value".
+// Same measures serve all rows/future product lines — mirrors the reusable component below.
+function bulletRow({label, actual, target, cls, statusText, tip, rangeThresholds}){
+  const clamp=v=>Math.max(0,Math.min(100, v));                 // fixed 0–100% shared scale
+  const rt = rangeThresholds || { good:target-5, poor:target+5 };
+  const lo=clamp(rt.good), hi=clamp(rt.poor);
+  const fillW=clamp(actual), tickL=clamp(target);
+  return `
+    <div class="blt-row ${cls}" title="${tip}">
+      <div class="blt-label">${label}</div>
+      <div class="blt-body">
+        <div class="blt-sub">Actual ${actual.toFixed(0)}% · Expected ${target}%</div>
+        <div class="blt-track">
+          <div class="blt-band b1" style="left:0;width:${lo}%"></div>
+          <div class="blt-band b2" style="left:${lo}%;width:${Math.max(0,hi-lo)}%"></div>
+          <div class="blt-band b3" style="left:${hi}%;width:${Math.max(0,100-hi)}%"></div>
+          <div class="blt-fill" style="width:${fillW}%"></div>
+          <div class="blt-tick" style="left:${tickL}%" title="Target ${target}%"></div>
+        </div>
+        <div class="blt-status">${statusText}</div>
+      </div>
+    </div>`;
 }
 function renderAvE(){
   const arr=filteredSubmissions();
-  const box=document.getElementById('aveGrid'); box.innerHTML='';
-  // Power BI feasibility: consolidated 6 individual cards into a single multi-category
-  // Bullet Chart visual (native OKViz Bullet Chart pattern, one visual with stacked category
-  // rows instead of 6 separate cards). Each row = Actual bar + vertical Expected target tick
-  // + flat qualitative band; status shown as plain colored text (Power BI KPI conditional
-  // formatting) instead of a FAVOURABLE/ADVERSE/ON PLAN pill badge; a thin conditional-format
-  // left accent + row divider separate categories. Exact A/E ratio + action live in the tooltip.
-  const SCALE_MAX=100;                       // bar track represents 0–100 loss-ratio points
+  const box=document.getElementById('aveGrid');
+  // OKViz bullet chart — one reusable BulletRow per product line, all sharing a fixed 0–100% scale.
+  // 3-state conditional colour on the Actual bar/status; exact values + variance + action in the tooltip.
   const rows=visibleProducts().map(p=>{
     const g=arr.filter(x=>x.product===p.name);
     const actual=g.length? g.reduce((s,x)=>s+x.lossRatio,0)/g.length : 0;
-    const ratio=actual/p.lossExpected; let cls='good',t='Favourable';
-    if(ratio>1.05){cls='bad';t='Adverse';} else if(ratio>0.98){cls='warn';t='On plan';}
+    const target=p.lossExpected;
+    const ratio=actual/target;
+    let cls='good', t='Favourable';
+    if(ratio>1.05){ cls='bad';  t='Adverse'; }
+    else if(ratio>0.98){ cls='warn'; t='On plan'; }
     // delta % = (A/E − 1) × 100, rounded to whole number
     const delta=Math.round((ratio-1)*100);
     const dir = delta>0 ? `${delta}% above plan`
               : delta<0 ? `${Math.abs(delta)}% below plan`
                         : 'in line with plan';
-    const fillW=Math.min(100, actual/SCALE_MAX*100);
-    const tickL=Math.min(100, p.lossExpected/SCALE_MAX*100);
-    // Hover tooltip: exact A/E, what A/E means, and implied action
+    // Hover tooltip: exact Actual / Expected / variance (A/E), what A/E means, and implied action
+    const variance=(actual-target).toFixed(1);
     const aeExplain='A/E = actual loss ratio ÷ expected. 1.00 = exactly on plan; above 1.00 = worse than expected.';
     const action = cls==='bad'  ? 'Action: may indicate risk leakage — check STP thresholds for this line (see Risk Leakage tab).'
                  : cls==='warn' ? 'Action: within tolerance — monitor next period.'
                                 : 'Action: none needed — performing better than plan.';
-    const tip=`${p.name} — A/E ${ratio.toFixed(2)}&#10;${aeExplain}&#10;${action}`;
-    return `
-      <div class="bullet-row ${cls}" title="${tip}">
-        <div class="br-label">${p.name}</div>
-        <div class="br-body">
-          <div class="ave-bar">
-            <div class="ave-bar-fill" style="width:${fillW}%"></div>
-            <div class="ave-tick" style="left:${tickL}%" title="Expected ${p.lossExpected}%"></div>
-          </div>
-          <div class="br-meta">
-            <span class="ave-detail">Actual ${actual.toFixed(0)}% · Expected ${p.lossExpected}%</span>
-            <span class="ave-status">${t} — ${dir}</span>
-          </div>
-        </div>
-      </div>`;
+    const tip=`${p.name}&#10;Actual ${actual.toFixed(1)}% · Expected ${target}% · Variance ${variance>0?'+':''}${variance} pp (A/E ${ratio.toFixed(2)})&#10;${aeExplain}&#10;${action}`;
+    return bulletRow({ label:p.name, actual, target, cls, statusText:`${t} — ${dir}`, tip });
   }).join('');
   box.innerHTML = rows || '<div class="empty">No product lines in scope.</div>';
 }
@@ -1414,15 +1435,52 @@ document.querySelectorAll('#driverTable thead th[data-sort]').forEach(th=>{
 });
 
 /* ---- What-If recompute (scope-aware baseline) ---- */
+// Single source of truth for each threshold (label/min/max/step/default/format/help), consumed by
+// BOTH the reusable Rule Thresholds slicer UI and the Sensitivity Curve sweep.
+const WHATIF_PARAMS={
+  prem:{ label:'STP Premium Limit',    min:25000, max:150000, step:2500, def:75000, fmt:v=>'£'+Math.round(v/1000)+'k',
+         help:'↑ limit → STP Rate ↑, GWP ↑, Loss Ratio may ↑ (larger risks pass).' },
+  lr:  { label:'Max Prior Loss Ratio', min:40,    max:100,    step:1,    def:70,    fmt:v=>Math.round(v)+'%',
+         help:'↑ ceiling → STP Rate ↑, but Loss Ratio ↑ (worse-history risks pass).' },
+  rs:  { label:'Risk-Score Ceiling',   min:30,    max:100,    step:1,    def:65,    fmt:v=>String(Math.round(v)),
+         help:'↑ ceiling → STP Rate ↑, modest Loss Ratio ↑ (marginal risks pass).' },
+};
+const DEFAULTS={ prem:WHATIF_PARAMS.prem.def, lr:WHATIF_PARAMS.lr.def, rs:WHATIF_PARAMS.rs.def };
+const THRESH_KEYS=['prem','lr','rs'];
+// Reusable Power BI-style range slicer: label + [min box][editable current box] + two-tone track + helper.
+function buildRuleSlider(key){
+  const p=WHATIF_PARAMS[key], pct=((p.def-p.min)/(p.max-p.min)*100).toFixed(2);
+  return `<div class="slider-block" data-key="${key}">
+    <span class="sb-lbl">${p.label}</span>
+    <div class="sb-inputs">
+      <span class="sb-box sb-min" title="Minimum">${p.fmt(p.min)}</span>
+      <input type="text" class="sb-box sb-cur" id="c-${key}" value="${p.fmt(p.def)}" inputmode="numeric" aria-label="${p.label} — current value (editable)">
+    </div>
+    <input type="range" class="rng" id="s-${key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.def}" style="--pct:${pct}%" aria-label="${p.label}">
+    <div class="sb-help">${p.help}</div>
+  </div>`;
+}
+document.getElementById('ruleSliders').innerHTML=THRESH_KEYS.map(buildRuleSlider).join('');
 const S={ prem:document.getElementById('s-prem'), lr:document.getElementById('s-lr'),
           rs:document.getElementById('s-rs') };
-const DEFAULTS={ prem:75000, lr:70, rs:65 };
-// Day-5: parameter metadata for the Sensitivity Curve sweep (same bounds as each slider)
-const WHATIF_PARAMS={
-  prem:{ label:'STP Premium Limit',     min:25000, max:150000, fmt:v=>'£'+Math.round(v/1000)+'k' },
-  lr:  { label:'Max Prior Loss Ratio',  min:40,    max:100,    fmt:v=>Math.round(v)+'%' },
-  rs:  { label:'Risk-Score Ceiling',    min:30,    max:100,    fmt:v=>Math.round(v) },
-};
+// Parse a typed current-value box back to a clamped, step-snapped number (accepts £ / k / % / plain).
+function parseThreshold(key,str){
+  const p=WHATIF_PARAMS[key];
+  let s=String(str).toLowerCase().replace(/[£%,\s]/g,''), mult=1;
+  if(s.endsWith('k')){ mult=1000; s=s.slice(0,-1); }
+  const v=parseFloat(s); if(isNaN(v)) return null;
+  const clamped=Math.min(p.max, Math.max(p.min, v*mult));
+  return Math.round((clamped-p.min)/p.step)*p.step + p.min;
+}
+// Typing an exact value into the current box moves the thumb + fires the same live recompute.
+THRESH_KEYS.forEach(key=>{
+  const box=document.getElementById('c-'+key);
+  box.addEventListener('change', ()=>{
+    const v=parseThreshold(key, box.value);
+    if(v==null){ box.value=WHATIF_PARAMS[key].fmt(+S[key].value); return; }
+    S[key].value=v; box.value=WHATIF_PARAMS[key].fmt(v); recompute();
+  });
+});
 // Day-5: Decomposition Tree dimensions + interaction state
 const DECOMP_DIMS={
   product:{ label:'Product Line',          of:p=>p.product },
@@ -1438,9 +1496,11 @@ function recompute(){
   const pol=visiblePolicies();
   const base=stpUnder(DEFAULTS,pol);
   const th={ prem:+S.prem.value, lr:+S.lr.value, rs:+S.rs.value };
-  document.getElementById('v-prem').textContent='£'+(th.prem/1000)+'k';
-  document.getElementById('v-lr').textContent=th.lr+'%';
-  document.getElementById('v-rs').textContent=th.rs;
+  // keep each current-value box + two-tone track in sync with the live slider value (any trigger path)
+  THRESH_KEYS.forEach(k=>{ const p=WHATIF_PARAMS[k], el=S[k]; if(!el) return;
+    const box=document.getElementById('c-'+k);
+    if(box && document.activeElement!==box) box.value=p.fmt(+el.value);
+    el.style.setProperty('--pct', ((el.value-p.min)/(p.max-p.min)*100)+'%'); });
   const sim=stpUnder(th,pol);
   const dStp=+(sim.rate-base.rate).toFixed(1);
   const lrDelta=+((sim.avgLoss-base.avgLoss)*0.25).toFixed(1);

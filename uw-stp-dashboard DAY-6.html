@@ -267,20 +267,20 @@ a{ color:var(--accent); }
    a thin conditional-coloured Actual bar, with a tall dark Target tick. No visible axis. */
 .bullet-chart{ display:flex; flex-direction:column; }
 .blt-row{ display:grid; grid-template-columns:150px 1fr; align-items:center; gap:16px;
-  padding:12px 6px; border-bottom:1px solid var(--border-soft); cursor:help; }
+  padding:8px 6px; border-bottom:1px solid var(--border-soft); cursor:help; }
 .blt-row:last-child{ border-bottom:none; }
 .blt-label{ font-size:12.5px; font-weight:700; color:var(--navy); }
 .blt-body{ min-width:0; }
-.blt-sub{ font-size:11px; color:var(--txt-dim); margin-bottom:6px; }   /* Actual X% · Expected Y% */
+.blt-sub{ font-size:11px; color:var(--txt-dim); margin-bottom:5px; }   /* Actual X% · Expected Y% */
 /* layered track — no border, no axis line */
-.blt-track{ position:relative; height:18px; }
+.blt-track{ position:relative; height:15px; }
 .blt-band{ position:absolute; top:0; bottom:0; }
 .blt-band.b1{ background:rgba(91,100,120,0.08); }   /* good range — lightest neutral */
 .blt-band.b2{ background:rgba(91,100,120,0.16); }   /* on-plan range — mid */
 .blt-band.b3{ background:rgba(91,100,120,0.26); }   /* poor range — darkest */
 .blt-fill{ position:absolute; left:0; top:50%; transform:translateY(-50%); height:6px; border-radius:2px; transition:width .5s ease; }
 .blt-tick{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--txt); border-radius:1px; }  /* Target marker */
-.blt-status{ font-size:12px; font-weight:700; margin-top:8px; }
+.blt-status{ font-size:12px; font-weight:700; margin-top:6px; }
 /* role-based conditional formatting — Actual bar + status text (success / warning / danger) */
 .blt-row.good .blt-fill{ background:var(--pos); }
 .blt-row.warn .blt-fill{ background:var(--warn); }
@@ -600,7 +600,7 @@ tr.leak-drill:hover{ background:var(--orange-soft); }
           </div>
           <span class="sub">Green ≥ 55% · Amber below</span>
         </div>
-        <div class="chart-wrap tall" style="height:320px;"><canvas id="barProduct"></canvas></div>
+        <div class="chart-wrap tall" style="height:240px;"><canvas id="barProduct"></canvas></div>
       </div>
       <div class="card">
         <div class="card-h"><div><h3>Actual vs Expected — Loss Ratio</h3></div><span class="sub">By product line · hover a row for detail</span></div>

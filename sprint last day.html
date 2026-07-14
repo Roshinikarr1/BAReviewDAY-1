@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UW STP Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #ffffff;
+    color: #252423;
+    font-size: 12px;
+    padding: 6px;
+  }
+  .dashboard { max-width: 1090px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  .header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f3f4f8;
+    border: 1px solid #e1e1e6;
+    border-radius: 4px;
+    height: 96px;
+    padding: 0 16px;
+  }
+  .header h1 { font-size: 22px; font-weight: 700; color: #252423; }
+  .brand {
+    position: absolute;
+    top: 12px; right: 18px;
+    font-size: 17px; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .brand .sapiens { color: #1a3a8f; }
+  .brand .sep { color: #b0b0b8; font-weight: 400; margin: 0 3px; }
+  .brand .suite { color: #3a7bd5; font-weight: 400; }
+
+  .date-panel { position: absolute; right: 18px; top: 34px; width: 250px; }
+  .date-panel .lbl { font-size: 11px; color: #605e5c; margin-bottom: 4px; }
+  .date-inputs { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .date-box {
+    display: flex; align-items: center; gap: 6px;
+    background: #fff; border: 1px solid #d1d1d6; border-radius: 2px;
+    padding: 3px 8px; font-size: 12px; color: #252423;
+  }
+  .date-box .cal { color: #605e5c; font-size: 11px; }
+
+  /* ---------- Sliders (range) ---------- */
+  .slider { position: relative; height: 16px; display: flex; align-items: center; }
+  .slider .track { position: absolute; left: 8px; right: 8px; height: 2px; background: #333; }
+  .slider .track.short { right: auto; width: 30px; }
+  .slider .knob {
+    position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: #fff; border: 1.5px solid #333; top: 1px;
+  }
+
+  /* ---------- Body ---------- */
+  .body {
+    display: flex;
+    border: 1px solid #e1e1e6;
+    border-radius: 4px;
+    margin-top: 6px;
+    min-height: 490px;
+    background: #f3f4f8;
+  }
+
+  /* ---------- Left filter rail ---------- */
+  .filters { width: 190px; padding: 14px; display: flex; flex-direction: column; gap: 22px; }
+  .filter .flabel { font-size: 12px; color: #252423; margin-bottom: 5px; }
+  .dropdown {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fff; border: 1px solid #d1d1d6; border-radius: 2px;
+    padding: 7px 10px; font-size: 15px; color: #444;
+  }
+  .dropdown .chev { color: #666; font-size: 10px; }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; padding: 14px 18px; }
+  .range-filters { display: flex; gap: 40px; margin-bottom: 20px; }
+  .range-filter { min-width: 200px; }
+  .range-filter .rlabel { font-size: 12px; color: #252423; margin-bottom: 8px; }
+  .range-values { display: flex; gap: 10px; margin-bottom: 8px; }
+  .range-values .val {
+    background: #fff; border: 1px solid #d1d1d6; border-radius: 2px;
+    padding: 5px 12px; font-size: 12px; min-width: 74px;
+  }
+  .range-values .val.narrow { min-width: 56px; }
+
+  /* ---------- Table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    font-weight: 600; color: #252423; padding: 6px 10px;
+    text-align: right; white-space: nowrap; border-bottom: 1px solid #d1d1d6;
+  }
+  thead th.rule-col { text-align: center; }
+  thead th .sort-arrow { font-size: 9px; display: block; text-align: center; }
+  tbody td { padding: 6px 10px; text-align: right; color: #252423; }
+  tbody td.rule { text-align: left; color: #333; }
+  tbody tr:nth-child(even) { background: #eceef4; }
+
+  /* ---------- KPI cards ---------- */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
+  .kpi {
+    background: #f3f4f8; border: 1px solid #e1e1e6; border-radius: 4px;
+    padding: 12px 16px;
+  }
+  .kpi .k-lbl { font-size: 11px; color: #605e5c; margin-bottom: 6px; }
+  .kpi .k-val { font-size: 26px; font-weight: 700; color: #252423; line-height: 1; }
+  .kpi .k-sub { font-size: 10px; margin-top: 6px; }
+  .kpi .up { color: #107c10; }
+  .kpi .down { color: #d13438; }
+
+  /* ---------- Chart cards ---------- */
+  .viz-row { display: grid; gap: 6px; margin-top: 6px; }
+  .viz-row.r2 { grid-template-columns: 1.6fr 1fr; }
+  .viz-row.r3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card {
+    background: #f3f4f8; border: 1px solid #e1e1e6; border-radius: 4px;
+    padding: 10px 12px 12px;
+  }
+  .card h3 {
+    font-size: 13px; font-weight: 600; color: #252423;
+    margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e1e1e6;
+  }
+  .chart-box { position: relative; height: 210px; }
+  .chart-box.short { height: 190px; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>UW STP Dashboard</h1>
+    <div class="brand"><span class="sapiens">SAPIENS</span><span class="sep">|</span><span class="suite">DataSuite</span></div>
+    <div class="date-panel">
+      <div class="lbl">Alert Generated Date</div>
+      <div class="date-inputs">
+        <div class="date-box"><span>01-01-2025</span><span class="cal">&#128197;</span></div>
+        <div class="date-box"><span>10-07-2026</span><span class="cal">&#128197;</span></div>
+      </div>
+      <div class="slider">
+        <div class="track"></div>
+        <div class="knob" style="left:0;"></div>
+        <div class="knob" style="right:0;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- Left filters -->
+    <div class="filters">
+      <div class="filter">
+        <div class="flabel">UW Level</div>
+        <div class="dropdown"><span>All</span><span class="chev">&#9660;</span></div>
+      </div>
+      <div class="filter">
+        <div class="flabel">Alert Type</div>
+        <div class="dropdown"><span>All</span><span class="chev">&#9660;</span></div>
+      </div>
+      <div class="filter">
+        <div class="flabel">Rule Data Factor Type</div>
+        <div class="dropdown"><span>All</span><span class="chev">&#9660;</span></div>
+      </div>
+      <div class="filter">
+        <div class="flabel">Alert Status</div>
+        <div class="dropdown"><span>All</span><span class="chev">&#9660;</span></div>
+      </div>
+      <div class="filter">
+        <div class="flabel">Rule Category</div>
+        <div class="dropdown"><span>All</span><span class="chev">&#9660;</span></div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+
+      <!-- Range filters -->
+      <div class="range-filters">
+        <div class="range-filter">
+          <div class="rlabel">Top N Rules</div>
+          <div class="range-values">
+            <div class="val narrow">0</div>
+            <div class="val narrow">12</div>
+          </div>
+          <div class="slider">
+            <div class="track short"></div>
+            <div class="knob" style="left:0;"></div>
+            <div class="knob" style="left:22px;"></div>
+          </div>
+        </div>
+        <div class="range-filter">
+          <div class="rlabel">STP Rate</div>
+          <div class="range-values">
+            <div class="val">0.10%</div>
+            <div class="val">98.60%</div>
+          </div>
+          <div class="slider">
+            <div class="track"></div>
+            <div class="knob" style="left:0;"></div>
+            <div class="knob" style="right:0;"></div>
+          </div>
+        </div>
+        <div class="range-filter">
+          <div class="rlabel">Loss Ratio</div>
+          <div class="range-values">
+            <div class="val">0.10%</div>
+            <div class="val">100.00%</div>
+          </div>
+          <div class="slider">
+            <div class="track"></div>
+            <div class="knob" style="left:0;"></div>
+            <div class="knob" style="right:0;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <table>
+        <thead>
+          <tr>
+            <th class="rule-col">Validation Rule</th>
+            <th>Proposal Count<span class="sort-arrow">&#9660;</span></th>
+            <th>STP Rate</th>
+            <th>Loss Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="rule">Vehicle Make rule for theft</td><td>82</td><td>52.96%</td><td>48.47%</td></tr>
+          <tr><td class="rule">Driver age less then 24</td><td>81</td><td>46.43%</td><td>49.82%</td></tr>
+          <tr><td class="rule">Insurance Amount rule</td><td>70</td><td>52.71%</td><td>44.92%</td></tr>
+          <tr><td class="rule">License Plate for Vehicle</td><td>55</td><td>54.56%</td><td>48.93%</td></tr>
+          <tr><td class="rule">LOB Travel for documents.</td><td>54</td><td>43.00%</td><td>55.67%</td></tr>
+          <tr><td class="rule">Invoice Template Rule</td><td>43</td><td>54.16%</td><td>42.05%</td></tr>
+          <tr><td class="rule">If asset type is motor or motorcycle</td><td>41</td><td>44.23%</td><td>49.97%</td></tr>
+          <tr><td class="rule">Is Bank account details needed in claim payment</td><td>41</td><td>58.41%</td><td>52.65%</td></tr>
+          <tr><td class="rule">Origin is Newspaper</td><td>41</td><td>44.20%</td><td>45.52%</td></tr>
+          <tr><td class="rule">Endorsement type rule</td><td>40</td><td>50.97%</td><td>43.37%</td></tr>
+          <tr><td class="rule">Standart Premium</td><td>39</td><td>51.72%</td><td>45.76%</td></tr>
+          <tr><td class="rule">If asset type is Property</td><td>36</td><td>46.82%</td><td>43.12%</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- ===================== KPI CARDS ===================== -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="k-lbl">Total Proposals</div>
+      <div class="k-val">623</div>
+      <div class="k-sub up">&#9650; 4.8% vs prev. period</div>
+    </div>
+    <div class="kpi">
+      <div class="k-lbl">Overall STP Rate</div>
+      <div class="k-val">49.8%</div>
+      <div class="k-sub up">&#9650; 2.1 pp vs prev. period</div>
+    </div>
+    <div class="kpi">
+      <div class="k-lbl">Avg Loss Ratio</div>
+      <div class="k-val">47.5%</div>
+      <div class="k-sub down">&#9660; 1.3 pp vs prev. period</div>
+    </div>
+    <div class="kpi">
+      <div class="k-lbl">Active Validation Rules</div>
+      <div class="k-val">12</div>
+      <div class="k-sub" style="color:#605e5c;">across 6 categories</div>
+    </div>
+  </div>
+
+  <!-- ===================== TREND + STATUS ===================== -->
+  <div class="viz-row r2">
+    <div class="card">
+      <h3>STP Rate &amp; Loss Ratio Trend</h3>
+      <div class="chart-box"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Alerts by Status</h3>
+      <div class="chart-box"><canvas id="statusChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ===================== 3 DIMENSION BREAKDOWNS ===================== -->
+  <div class="viz-row r3">
+    <div class="card">
+      <h3>Proposals by UW Level</h3>
+      <div class="chart-box short"><canvas id="uwLevelChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Alerts by Rule Category</h3>
+      <div class="chart-box short"><canvas id="categoryChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Alert Type Distribution</h3>
+      <div class="chart-box short"><canvas id="alertTypeChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ===================== TIME-TO-DECISION GAUGE ===================== -->
+  <div class="viz-row r2">
+    <div class="card">
+      <h3>Avg Time-to-Decision (days)</h3>
+      <div class="chart-box"><canvas id="ttdGauge"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Avg Time-to-Decision by UW Level</h3>
+      <div class="chart-box"><canvas id="ttdByLevelChart"></canvas></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Power BI-like light theme palette
+  const PBI = ['#118DFF', '#12239E', '#E66C37', '#6B007B', '#00B7C3', '#E044A7', '#744EC2', '#D9B300'];
+  Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#605e5c';
+  const gridColor = '#e1e1e6';
+
+  // ---- STP Rate & Loss Ratio trend (uses the Alert Generated Date dimension) ----
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+      datasets: [
+        { label: 'STP Rate', data: [44.2, 46.1, 47.8, 48.5, 49.0, 50.3, 49.8],
+          borderColor: '#118DFF', backgroundColor: 'rgba(17,141,255,0.12)',
+          fill: true, tension: 0.35, pointRadius: 3, borderWidth: 2 },
+        { label: 'Loss Ratio', data: [49.1, 48.4, 48.0, 47.2, 47.9, 46.8, 47.5],
+          borderColor: '#E66C37', backgroundColor: 'transparent',
+          fill: false, tension: 0.35, pointRadius: 3, borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, usePointStyle: true } } },
+      scales: {
+        y: { min: 40, max: 55, grid: { color: gridColor }, ticks: { callback: v => v + '%' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  // ---- Alerts by Status (Alert Status dimension) ----
+  new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Open', 'In Review', 'Resolved', 'Closed'],
+      datasets: [{ data: [142, 96, 231, 154],
+        backgroundColor: ['#E66C37', '#D9B300', '#118DFF', '#107c10'], borderColor: '#fff', borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
+      plugins: { legend: { position: 'right', labels: { boxWidth: 12, usePointStyle: true } } }
+    }
+  });
+
+  // ---- Proposals by UW Level (UW Level dimension) ----
+  new Chart(document.getElementById('uwLevelChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Auto', 'Level 1', 'Level 2', 'Level 3'],
+      datasets: [{ label: 'Proposals', data: [268, 174, 121, 60],
+        backgroundColor: '#118DFF', borderRadius: 3, barThickness: 34 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } }
+    }
+  });
+
+  // ---- Alerts by Rule Category (Rule Category dimension) ----
+  new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Vehicle', 'Driver', 'Financial', 'Document', 'Asset', 'Origin'],
+      datasets: [{ label: 'Alerts', data: [137, 81, 152, 97, 77, 41],
+        backgroundColor: '#12239E', borderRadius: 3, barThickness: 16 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, grid: { color: gridColor } }, y: { grid: { display: false } } }
+    }
+  });
+
+  // ---- Alert Type Distribution (Alert Type dimension) ----
+  new Chart(document.getElementById('alertTypeChart'), {
+    type: 'pie',
+    data: {
+      labels: ['Fraud', 'Compliance', 'Data Quality', 'Pricing'],
+      datasets: [{ data: [186, 142, 205, 90],
+        backgroundColor: ['#6B007B', '#00B7C3', '#118DFF', '#E66C37'], borderColor: '#fff', borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { boxWidth: 12, usePointStyle: true } } }
+    }
+  });
+
+  // ---- Time-to-Decision GAUGE (semicircle doughnut + needle) ----
+  const TTD_VALUE  = 2.8;   // current avg days
+  const TTD_TARGET = 3.0;   // SLA target
+  const TTD_MAX    = 7.0;   // scale ceiling
+  // color zones on a 0..TTD_MAX scale: good / watch / breach
+  const zones = [
+    { end: 3.0, color: '#107c10' },  // 0-3 days  = good
+    { end: 5.0, color: '#E6A700' },  // 3-5 days  = watch
+    { end: 7.0, color: '#d13438' }   // 5-7 days  = breach
+  ];
+  let prevEnd = 0;
+  const zoneSpans = zones.map(z => { const s = z.end - prevEnd; prevEnd = z.end; return s; });
+
+  const gaugeNeedle = {
+    id: 'gaugeNeedle',
+    afterDatasetDraw(chart) {
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(0).data[0];
+      if (!meta) return;
+      const cx = meta.x, cy = meta.y;
+      const r  = meta.outerRadius;
+
+      // ----- needle -----
+      const frac = Math.min(TTD_VALUE / TTD_MAX, 1);
+      const angle = Math.PI * (1 - frac);           // PI (left) -> 0 (right)
+      const nx = cx + Math.cos(angle) * r * 0.82;
+      const ny = cy - Math.sin(angle) * r * 0.82;
+      ctx.save();
+      ctx.strokeStyle = '#323130';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+      // hub
+      ctx.fillStyle = '#323130';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ----- target tick -----
+      const tFrac = Math.min(TTD_TARGET / TTD_MAX, 1);
+      const tAng = Math.PI * (1 - tFrac);
+      ctx.strokeStyle = '#12239E';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(tAng) * meta.innerRadius, cy - Math.sin(tAng) * meta.innerRadius);
+      ctx.lineTo(cx + Math.cos(tAng) * meta.outerRadius, cy - Math.sin(tAng) * meta.outerRadius);
+      ctx.stroke();
+
+      // ----- center readout -----
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#252423';
+      ctx.font = '700 28px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(TTD_VALUE.toFixed(1), cx, cy - 6);
+      ctx.fillStyle = '#605e5c';
+      ctx.font = '11px "Segoe UI", Arial, sans-serif';
+      ctx.fillText('days avg', cx, cy + 12);
+      const withinSla = TTD_VALUE <= TTD_TARGET;
+      ctx.fillStyle = withinSla ? '#107c10' : '#d13438';
+      ctx.font = '600 11px "Segoe UI", Arial, sans-serif';
+      ctx.fillText((withinSla ? '▲ within' : '▼ over') + ' SLA (' + TTD_TARGET.toFixed(1) + 'd)', cx, cy + 28);
+
+      // ----- min / max labels -----
+      ctx.fillStyle = '#605e5c';
+      ctx.font = '10px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('0', cx - r, cy + 14);
+      ctx.textAlign = 'right';
+      ctx.fillText(TTD_MAX.toFixed(0), cx + r, cy + 14);
+      ctx.restore();
+    }
+  };
+
+  new Chart(document.getElementById('ttdGauge'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Good (0-3d)', 'Watch (3-5d)', 'Breach (5-7d)'],
+      datasets: [{ data: zoneSpans, backgroundColor: zones.map(z => z.color),
+        borderColor: '#fff', borderWidth: 1, circumference: 180, rotation: 270 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      layout: { padding: { bottom: 10 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false }
+      }
+    },
+    plugins: [gaugeNeedle]
+  });
+
+  // ---- Avg Time-to-Decision by UW Level (companion detail) ----
+  new Chart(document.getElementById('ttdByLevelChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Auto', 'Level 1', 'Level 2', 'Level 3'],
+      datasets: [{ label: 'Avg days', data: [0.2, 2.1, 3.4, 4.8],
+        backgroundColor: ['#107c10', '#107c10', '#E6A700', '#d13438'],
+        borderRadius: 3, barThickness: 34 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => c.raw + ' days avg' } } },
+      scales: { y: { beginAtZero: true, grid: { color: gridColor }, ticks: { callback: v => v + 'd' } },
+                x: { grid: { display: false } } }
+    }
+  });
+</script>
+</body>
+</html>
